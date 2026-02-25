@@ -1,0 +1,21 @@
+{
+  "mossman.tui.common.pagination.next": "»",
+  "mossman.tui.common.pagination.page_info": "Page %s of %s",
+  "mossman.tui.common.pagination.prev": "«",
+  "mossman.tui.common.view_btn": "[View]",
+  "mossman.tui.project.create_btn": "[Create New Project]",
+  "mossman.tui.project.create_hover": "Click to create a new project",
+  "mossman.tui.project.created": "Created Project: %s ",
+  "mossman.tui.project.list.footer": "------------------------",
+  "mossman.tui.project.list.header": "--- MossMan Projects ---",
+  "mossman.tui.project.view_hover": "Click to view project details",
+  "mossman.tui.ticket.back_btn": "[Back to Projects]",
+  "mossman.tui.ticket.back_hover": "Return to project list",
+  "mossman.tui.ticket.create_btn": "[Create Ticket]",
+  "mossman.tui.ticket.create_hover": "Click to create a new ticket",
+  "mossman.tui.ticket.created": "Created Ticket: %s ",
+  "mossman.tui.ticket.edit_field_hover": "Click to edit %s",
+  "mossman.tui.ticket.list.footer": "------------------------",
+  "mossman.tui.ticket.list.header": "--- Project: %s ---",
+  "mossman.tui.ticket.view_hover": "Click to view ticket details"
+}
