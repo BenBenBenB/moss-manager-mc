@@ -34,6 +34,11 @@ public class MossManTuiMod implements ModInitializer {
 
         LOGGER.info("MossMan TUI commands registered.");
 
+        if (MossManApi.getEventBus() == null) {
+            LOGGER.error("MossMan core did not initialize successfully — event subscriptions skipped.");
+            return;
+        }
+
         // Notify new assignee via mail
         MossManApi.getEventBus().subscribe(TicketAssignedEvent.class, event -> {
             try {

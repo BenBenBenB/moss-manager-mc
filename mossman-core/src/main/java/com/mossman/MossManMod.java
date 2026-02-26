@@ -83,7 +83,7 @@ public class MossManMod implements ModInitializer {
 
             LOGGER.info("Database and Use Cases initialized successfully.");
         } catch (SQLException e) {
-            LOGGER.error("Failed to initialize Database Manager", e);
+            throw new RuntimeException("MossMan: failed to initialize database — commands and events will not work", e);
         }
     }
 }
