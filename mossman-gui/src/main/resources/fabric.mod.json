@@ -1,0 +1,27 @@
+{
+    "schemaVersion": 1,
+    "id": "mossman-gui",
+    "version": "${version}",
+    "name": "MossMan GUI",
+    "description": "Graphical interface for MossMan (work in progress).",
+    "authors": [
+        "BenB"
+    ],
+    "contact": {
+        "homepage": "https://github.com/BenBenBenB/moss-man",
+        "sources": "https://github.com/BenBenBenB/moss-man"
+    },
+    "license": "MIT",
+    "environment": "client",
+    "entrypoints": {
+        "client": [
+            "com.mossman.MossManGuiMod"
+        ]
+    },
+    "depends": {
+        "fabricloader": ">=0.18.3",
+        "minecraft": ">=1.21.11",
+        "fabric-api": "*",
+        "mossman": "*"
+    }
+}

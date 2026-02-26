@@ -8,3 +8,5 @@ pluginManagement {
 		gradlePluginPortal()
 	}
 }
+
+include 'mossman-core', 'mossman-tui', 'mossman-gui'
