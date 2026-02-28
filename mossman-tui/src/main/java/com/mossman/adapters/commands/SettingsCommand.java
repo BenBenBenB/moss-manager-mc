@@ -3,7 +3,7 @@ package com.mossman.adapters.commands;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.tree.LiteralCommandNode;
+import com.mossman.MossManApi;
 import com.mossman.adapters.tui.SuggestionHelper;
 import com.mossman.adapters.tui.TuiHelper;
 import com.mossman.domain.entities.PlayerSettings;
@@ -20,16 +20,15 @@ import java.util.UUID;
 
 public class SettingsCommand {
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, LiteralCommandNode<ServerCommandSource> rootNode) {
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         var settingsNode = CommandManager.literal("settings")
                 .executes(SettingsCommand::viewSettings)
                 .then(CommandManager.literal("timezone")
                         .then(CommandManager.argument("zone", StringArgumentType.greedyString())
                                 .suggests(SuggestionHelper::suggestCommonTimezones)
-                                .executes(SettingsCommand::setTimezone)))
-                .build();
+                                .executes(SettingsCommand::setTimezone)));
 
-        rootNode.addChild(settingsNode);
+        MossManApi.registerSubcommand(dispatcher, settingsNode);
     }
 
     private static int viewSettings(CommandContext<ServerCommandSource> context) {

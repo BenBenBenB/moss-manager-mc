@@ -28,6 +28,11 @@ public class DatabaseManager {
     private final Dao<TimeLogDb, Long> timeLogDao;
 
     public DatabaseManager(String databaseUrl) throws SQLException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            throw new SQLException("SQLite JDBC driver not found on classpath", e);
+        }
         this.connectionSource = new JdbcConnectionSource(databaseUrl);
         createTables();
         this.projectDao = DaoManager.createDao(connectionSource, ProjectDb.class);

@@ -3,7 +3,7 @@ package com.mossman.adapters.commands;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.tree.LiteralCommandNode;
+import com.mossman.MossManApi;
 import com.mossman.domain.util.DurationParser;
 import com.mossman.adapters.tui.NbtPatchParser;
 import com.mossman.adapters.tui.ProjectSuggestions;
@@ -73,7 +73,7 @@ public class TicketCommand {
         return java.util.Optional.of(new TicketResolution(project, ticketOpt.get(), prefix));
     }
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, LiteralCommandNode<ServerCommandSource> rootNode) {
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         var ticketNode = CommandManager.literal("ticket")
                 .then(CommandManager.literal("list")
                         .then(CommandManager.argument("prefix", StringArgumentType.word()).suggests(SuggestionHelper::suggestVisiblePrefixes)
@@ -153,10 +153,9 @@ public class TicketCommand {
                                         .suggests(ProjectSuggestions.suggestRelationshipTypeNamesForKey("sourceKey"))
                                         .then(CommandManager.argument("targetKey", StringArgumentType.word())
                                                 .suggests(TicketSuggestions::suggestTicketKeys)
-                                                .executes(TicketCommand::unlinkTickets)))))
-                .build();
+                                                .executes(TicketCommand::unlinkTickets)))));
 
-        rootNode.addChild(ticketNode);
+        MossManApi.registerSubcommand(dispatcher, ticketNode);
     }
 
     private static int listTickets(CommandContext<ServerCommandSource> context) {

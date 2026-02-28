@@ -1,6 +1,8 @@
 package com.mossman;
 
+import com.mossman.adapters.commands.AdminCommand;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,8 +84,12 @@ public class MossManMod implements ModInitializer {
                     addCommentUseCase, deleteCommentUseCase, logTimeUseCase, deleteTimeLogUseCase);
 
             LOGGER.info("Database and Use Cases initialized successfully.");
-        } catch (SQLException e) {
-            throw new RuntimeException("MossMan: failed to initialize database — commands and events will not work", e);
+
+            CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                    AdminCommand.register(dispatcher));
+        } catch (Exception e) {
+            LOGGER.error("MossMan: failed to initialize — commands and events will not work", e);
+            throw new RuntimeException("MossMan: failed to initialize — commands and events will not work", e);
         }
     }
 }

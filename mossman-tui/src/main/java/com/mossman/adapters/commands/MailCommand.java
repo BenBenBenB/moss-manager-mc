@@ -5,7 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.tree.LiteralCommandNode;
+import com.mossman.MossManApi;
 import com.mossman.adapters.tui.SuggestionHelper;
 import com.mossman.adapters.tui.TuiHelper;
 import com.mossman.domain.entities.MailMessage;
@@ -22,7 +22,7 @@ import java.util.UUID;
 
 public class MailCommand {
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, LiteralCommandNode<ServerCommandSource> rootNode) {
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         var mailNode = CommandManager.literal("mail")
                 .executes(MailCommand::showInbox)
                 .then(CommandManager.literal("list")
@@ -37,10 +37,9 @@ public class MailCommand {
                         .then(CommandManager.argument("player", GameProfileArgumentType.gameProfile())
                                 .then(CommandManager.argument("subject", StringArgumentType.string())
                                         .then(CommandManager.argument("message", StringArgumentType.greedyString())
-                                                .executes(MailCommand::sendMail)))))
-                .build();
+                                                .executes(MailCommand::sendMail)))));
 
-        rootNode.addChild(mailNode);
+        MossManApi.registerSubcommand(dispatcher, mailNode);
     }
 
     private static int showInbox(CommandContext<ServerCommandSource> context) {

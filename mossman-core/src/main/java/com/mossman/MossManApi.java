@@ -1,9 +1,14 @@
 package com.mossman;
 
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.mossman.domain.events.DomainEventBus;
 import com.mossman.domain.usecases.*;
 import com.mossman.infrastructure.persistence.*;
 import com.mossman.infrastructure.persistence.DatabaseManager;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.command.ServerCommandSource;
 
 /**
  * Public API for the MossMan core mod. Other mods (mossman-tui, mossman-gui)
@@ -156,4 +161,22 @@ public class MossManApi {
     public static OrmLiteCommentRepository getCommentRepository() { return commentRepository; }
     public static OrmLitePlayerSettingsRepository getPlayerSettingsRepository() { return playerSettingsRepository; }
     public static OrmLiteTimeLogRepository getTimeLogRepository() { return timeLogRepository; }
+
+    /**
+     * Adds a top-level subcommand to the /mossman command tree.
+     *
+     * Call this inside a CommandRegistrationCallback listener to extend /mossman
+     * from any mod (core, TUI, GUI, or third-party).
+     */
+    public static void registerSubcommand(
+            CommandDispatcher<ServerCommandSource> dispatcher,
+            LiteralArgumentBuilder<ServerCommandSource> subcommand) {
+        // Ensure the mossman root node exists (no-op if already registered).
+        dispatcher.register(CommandManager.literal("mossman"));
+        // Always fetch the live node — dispatcher.register() returns the newly-built
+        // node, not the one already in the tree when the literal already existed.
+        LiteralCommandNode<ServerCommandSource> root =
+                (LiteralCommandNode<ServerCommandSource>) dispatcher.getRoot().getChild("mossman");
+        root.addChild(subcommand.build());
+    }
 }
