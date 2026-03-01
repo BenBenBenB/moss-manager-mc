@@ -123,8 +123,8 @@ public class CreateProjectScreen extends Screen {
                     client.player.getGameProfile().name()
             );
             client.setScreen(parent);
-        } catch (IllegalArgumentException e) {
-            errorMessage = e.getMessage();
+        } catch (Exception e) {
+            errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         }
     }
 }

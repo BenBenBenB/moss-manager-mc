@@ -26,12 +26,21 @@ public class ProjectListScreen extends Screen {
         this.parent = parent;
     }
 
+    private String loadError;
+
     @Override
     protected void init() {
-        UUID playerId = client.player != null ? client.player.getUuid() : null;
-        List<Project> projects = playerId != null
-                ? MossManApi.getProjectRepository().findAllForUser(playerId, 0, 1000)
-                : MossManApi.getProjectRepository().findAll(0, 1000);
+        loadError = null;
+        List<Project> projects;
+        try {
+            UUID playerId = client.player != null ? client.player.getUuid() : null;
+            projects = playerId != null
+                    ? MossManApi.getProjectRepository().findAllForUser(playerId, 0, 1000)
+                    : MossManApi.getProjectRepository().findAll(0, 1000);
+        } catch (Exception e) {
+            projects = List.of();
+            loadError = "Failed to load projects: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+        }
 
         projectList = new ProjectListWidget(client, width, height - HEADER_HEIGHT - FOOTER_HEIGHT, HEADER_HEIGHT, ITEM_HEIGHT, projects);
         addDrawableChild(projectList);
@@ -48,6 +57,9 @@ public class ProjectListScreen extends Screen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 12, 0xFFFFFF);
+        if (loadError != null) {
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal(loadError), width / 2, HEADER_HEIGHT + 4, 0xFF4444);
+        }
     }
 
     private void openCreateScreen() {
@@ -87,19 +99,17 @@ public class ProjectListScreen extends Screen {
             }
 
             @Override
-            public void render(DrawContext context, int mouseX, int mouseY, boolean hovered, float deltaTicks) {
-                int x = getContentX();
-                int y = getContentY();
+            public void render(DrawContext context, int mouseX, int mouseY, boolean hovered, float tickDelta) {
                 context.drawTextWithShadow(
                         ProjectListScreen.this.textRenderer,
                         Text.literal("[" + project.getTicketPrefix() + "] " + project.getName()),
-                        x, y + 2, 0xFFFFFF);
+                        getX(), getY() + 2, 0xFFFFFF);
                 String desc = project.getDescription();
                 if (desc != null && !desc.isEmpty()) {
                     context.drawTextWithShadow(
                             ProjectListScreen.this.textRenderer,
                             Text.literal(desc),
-                            x, y + 13, 0xAAAAAA);
+                            getX(), getY() + 13, 0xAAAAAA);
                 }
             }
 
