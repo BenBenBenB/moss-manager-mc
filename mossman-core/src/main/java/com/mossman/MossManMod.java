@@ -3,7 +3,9 @@ package com.mossman;
 import com.mossman.adapters.commands.AdminCommand;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.WorldSavePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,8 +22,8 @@ import com.mossman.infrastructure.persistence.OrmLiteTicketRelationshipRepositor
 import com.mossman.infrastructure.persistence.OrmLiteTimeLogRepository;
 import com.mossman.domain.usecases.*;
 
-import java.io.File;
-import java.sql.SQLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class MossManMod implements ModInitializer {
     public static final String MOD_ID = "mossman";
@@ -33,9 +35,24 @@ public class MossManMod implements ModInitializer {
 
         ConfigManager.loadConfig();
 
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                AdminCommand.register(dispatcher));
+
+        ServerLifecycleEvents.SERVER_STARTED.register(this::initializeForWorld);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> MossManApi.shutdown());
+    }
+
+    private void initializeForWorld(MinecraftServer server) {
         try {
-            File dbFile = new File(FabricLoader.getInstance().getGameDir().toFile(), "mossman.db");
-            String dbUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath();
+            // LEVEL_DAT parent gives the world save root without the trailing "." from WorldSavePath.ROOT
+            Path dataDir = server.getSavePath(WorldSavePath.LEVEL_DAT)
+                    .getParent()
+                    .toAbsolutePath()
+                    .normalize()
+                    .resolve("data");
+            Files.createDirectories(dataDir);
+            Path dbPath = dataDir.resolve("mossman.db");
+            String dbUrl = "jdbc:sqlite:" + dbPath;
             DatabaseManager databaseManager = new DatabaseManager(dbUrl);
             SimpleEventBus eventBus = new SimpleEventBus();
 
@@ -83,13 +100,9 @@ public class MossManMod implements ModInitializer {
                     sendMailUseCase, markMailReadUseCase, linkTicketsUseCase, unlinkTicketsUseCase,
                     addCommentUseCase, deleteCommentUseCase, logTimeUseCase, deleteTimeLogUseCase);
 
-            LOGGER.info("Database and Use Cases initialized successfully.");
-
-            CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                    AdminCommand.register(dispatcher));
+            LOGGER.info("MossMan: database initialized at {}", dbPath);
         } catch (Exception e) {
-            LOGGER.error("MossMan: failed to initialize — commands and events will not work", e);
-            throw new RuntimeException("MossMan: failed to initialize — commands and events will not work", e);
+            LOGGER.error("MossMan: failed to initialize database for world — commands will not work", e);
         }
     }
 }

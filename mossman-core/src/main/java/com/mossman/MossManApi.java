@@ -162,6 +162,50 @@ public class MossManApi {
     public static OrmLitePlayerSettingsRepository getPlayerSettingsRepository() { return playerSettingsRepository; }
     public static OrmLiteTimeLogRepository getTimeLogRepository() { return timeLogRepository; }
 
+    /** Called by {@link MossManMod} when the server stops. Package-private. */
+    static void shutdown() {
+        if (databaseManager != null) {
+            try {
+                databaseManager.close();
+            } catch (Exception e) {
+                MossManMod.LOGGER.error("MossMan: error closing database", e);
+            }
+        }
+        eventBus = null;
+        databaseManager = null;
+        projectRepository = null;
+        ticketRepository = null;
+        memberRepository = null;
+        mailRepository = null;
+        ticketRelationshipRepository = null;
+        commentRepository = null;
+        playerSettingsRepository = null;
+        timeLogRepository = null;
+        createProjectUseCase = null;
+        createTicketUseCase = null;
+        updateTicketUseCase = null;
+        updateProjectUseCase = null;
+        addMemberUseCase = null;
+        updateMemberUseCase = null;
+        removeMemberUseCase = null;
+        transferOwnershipUseCase = null;
+        updateProjectStatusesUseCase = null;
+        updateProjectTicketTypesUseCase = null;
+        updateProjectRelationshipTypesUseCase = null;
+        assignTicketUseCase = null;
+        unassignTicketUseCase = null;
+        observeTicketUseCase = null;
+        unobserveTicketUseCase = null;
+        sendMailUseCase = null;
+        markMailReadUseCase = null;
+        linkTicketsUseCase = null;
+        unlinkTicketsUseCase = null;
+        addCommentUseCase = null;
+        deleteCommentUseCase = null;
+        logTimeUseCase = null;
+        deleteTimeLogUseCase = null;
+    }
+
     /**
      * Adds a top-level subcommand to the /mossman command tree.
      *
