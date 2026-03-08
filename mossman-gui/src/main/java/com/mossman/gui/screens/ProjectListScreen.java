@@ -31,9 +31,10 @@ public class ProjectListScreen extends Screen {
     @Override
     protected void init() {
         loadError = null;
+        UUID playerId = client.player != null ? client.player.getUuid() : null;
+
         List<Project> projects;
         try {
-            UUID playerId = client.player != null ? client.player.getUuid() : null;
             projects = playerId != null
                     ? MossManApi.getProjectRepository().findAllForUser(playerId, 0, 1000)
                     : MossManApi.getProjectRepository().findAll(0, 1000);
@@ -42,14 +43,25 @@ public class ProjectListScreen extends Screen {
             loadError = "Failed to load projects: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         }
 
+        long unread = 0;
+        if (playerId != null) {
+            try {
+                unread = MossManApi.getMailRepository().countUnread(playerId);
+            } catch (Exception ignored) {}
+        }
+
         projectList = new ProjectListWidget(client, width, height - HEADER_HEIGHT - FOOTER_HEIGHT, HEADER_HEIGHT, ITEM_HEIGHT, projects);
         addDrawableChild(projectList);
 
+        String inboxLabel = unread > 0 ? "Inbox (" + unread + ")" : "Inbox";
         addDrawableChild(ButtonWidget.builder(Text.literal("New Project"), btn -> openCreateScreen())
-                .dimensions(width / 2 - 104, height - 28, 100, 20)
+                .dimensions(width / 2 - 154, height - 28, 100, 20)
+                .build());
+        addDrawableChild(ButtonWidget.builder(Text.literal(inboxLabel), btn -> client.setScreen(new MailInboxScreen(this)))
+                .dimensions(width / 2 - 50, height - 28, 100, 20)
                 .build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), btn -> close())
-                .dimensions(width / 2 + 4, height - 28, 100, 20)
+                .dimensions(width / 2 + 54, height - 28, 100, 20)
                 .build());
     }
 
@@ -78,6 +90,7 @@ public class ProjectListScreen extends Screen {
             for (Project project : projects) {
                 addEntry(new ProjectEntry(project));
             }
+            initialized = true;
         }
 
         @Override
@@ -88,6 +101,16 @@ public class ProjectListScreen extends Screen {
         @Override
         protected int getScrollbarX() {
             return ProjectListScreen.this.width / 2 + getRowWidth() / 2 + 4;
+        }
+
+        private boolean initialized = false;
+
+        @Override
+        public void setSelected(ProjectEntry entry) {
+            super.setSelected(entry);
+            if (initialized && entry != null) {
+                ProjectListScreen.this.client.setScreen(new ProjectDetailScreen(ProjectListScreen.this, entry.project));
+            }
         }
 
         public class ProjectEntry extends AlwaysSelectedEntryListWidget.Entry<ProjectEntry> {
