@@ -3,6 +3,7 @@ package com.mossman.gui.screens;
 import com.mossman.MossManApi;
 import com.mossman.domain.entities.Project;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
@@ -90,7 +91,6 @@ public class ProjectListScreen extends Screen {
             for (Project project : projects) {
                 addEntry(new ProjectEntry(project));
             }
-            initialized = true;
         }
 
         @Override
@@ -103,22 +103,19 @@ public class ProjectListScreen extends Screen {
             return ProjectListScreen.this.width / 2 + getRowWidth() / 2 + 4;
         }
 
-        private boolean initialized = false;
-
-        @Override
-        public void setSelected(ProjectEntry entry) {
-            super.setSelected(entry);
-            if (initialized && entry != null) {
-                ProjectListScreen.this.client.setScreen(new ProjectDetailScreen(ProjectListScreen.this, entry.project));
-            }
-        }
-
         public class ProjectEntry extends AlwaysSelectedEntryListWidget.Entry<ProjectEntry> {
 
             private final Project project;
 
             public ProjectEntry(Project project) {
                 this.project = project;
+            }
+
+            @Override
+            public boolean mouseClicked(Click click, boolean propagate) {
+                ProjectListWidget.this.setSelected(this);
+                ProjectListScreen.this.client.setScreen(new ProjectDetailScreen(ProjectListScreen.this, this.project));
+                return true;
             }
 
             @Override
