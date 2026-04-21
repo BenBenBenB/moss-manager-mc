@@ -1,0 +1,63 @@
+{
+    "name": "Minecraft Java Mod Dev",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    // Forward ports if running a local test server
+    "forwardPorts": [
+        25565
+    ],
+    "portsAttributes": {
+        "25565": {
+            "label": "Minecraft Server",
+            "onAutoForward": "silent"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "vscjava.vscode-java-pack",
+                "vscjava.vscode-gradle",
+                "redhat.java",
+                "vscjava.vscode-java-debug",
+                "vscjava.vscode-java-test",
+                "vscjava.vscode-maven",
+                "ms-vscode.hexeditor",
+                "streetsidesoftware.code-spell-checker",
+                // Claude Code extension — pairs with the claude CLI already in the image
+                "anthropic.claude-code"
+            ],
+            "settings": {
+                "java.jdt.ls.java.home": "/usr/lib/jvm/java-21-openjdk-amd64",
+                "java.configuration.runtimes": [
+                    {
+                        "name": "JavaSE-21",
+                        "path": "/usr/lib/jvm/java-21-openjdk-amd64",
+                        "default": true
+                    },
+                    {
+                        "name": "JavaSE-17",
+                        "path": "/usr/lib/jvm/java-17-openjdk-amd64"
+                    }
+                ],
+                "java.compile.nullAnalysis.mode": "automatic",
+                "editor.tabSize": 4,
+                "editor.insertSpaces": true,
+                "editor.formatOnSave": true,
+                "files.eol": "\n",
+                "gradle.nestedProjects": true
+            }
+        }
+    },
+    "remoteUser": "mcdev",
+    "postCreateCommand": "bash .devcontainer/post-create.sh",
+    // Persist Gradle, Maven, npm, and Claude Code caches across rebuilds
+    "mounts": [
+        "source=mcmod-gradle-cache,target=/home/mcdev/.gradle,type=volume",
+        "source=mcmod-maven-cache,target=/home/mcdev/.m2,type=volume",
+        "source=mcmod-npm-cache,target=/home/mcdev/.npm,type=volume",
+        "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+        "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"
+    ]
+}
