@@ -79,7 +79,7 @@ ENV PATH="/home/${USERNAME}/.npm-global/bin:${PATH}"
 # Native installer (curl | bash) cannot run non-interactively in Docker;
 # npm install is the reliable headless method.
 RUN npm config set prefix "${NPM_CONFIG_PREFIX}" \
-    && npm install -g @anthropic-ai/claude-code
+    && npm install -g @anthropic-ai/claude-code @openai/codex
 
 # ── Shell quality-of-life ─────────────────────
 RUN echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.bashrc \
@@ -90,4 +90,4 @@ RUN echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.bashrc \
     && echo 'alias gw="./gradlew"' >> ~/.bashrc
 
 # ── Verify ────────────────────────────────────
-RUN java -version && gradle --version && node --version && claude --version
+RUN java -version && gradle --version && node --version && claude --version && codex --version

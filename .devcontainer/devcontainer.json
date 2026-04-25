@@ -52,12 +52,12 @@
     },
     "remoteUser": "mcdev",
     "postCreateCommand": "bash .devcontainer/post-create.sh",
-    // Persist Gradle, Maven, npm, and Claude Code caches across rebuilds
     "mounts": [
         "source=mcmod-gradle-cache,target=/home/mcdev/.gradle,type=volume",
         "source=mcmod-maven-cache,target=/home/mcdev/.m2,type=volume",
         "source=mcmod-npm-cache,target=/home/mcdev/.npm,type=volume",
         "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-        "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"
+        "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+        "source=codex-config-${devcontainerId},target=/home/mcdev/.codex,type=volume"
     ]
 }

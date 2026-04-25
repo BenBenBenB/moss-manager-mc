@@ -32,6 +32,7 @@ java -version 2>&1 | head -1 | xargs -I{} echo "Java 21:   {}" || true
 gradle --version 2>/dev/null | grep "^Gradle " | xargs -I{} echo "Gradle:    {}" || true
 node --version 2>/dev/null | xargs -I{} echo "Node.js:   {}" || true
 claude --version 2>/dev/null | xargs -I{} echo "Claude:    {}" || true
+codex --version 2>/dev/null | xargs -I{} echo "Codex:     {}" || true
 git --version 2>/dev/null | xargs -I{} echo "Git:       {}" || true
 echo "────────────────────────────────────────────────────"
 
@@ -40,6 +41,11 @@ echo ""
 echo "🤖  Claude Code is installed. To authenticate, run:"
 echo ""
 echo "      claude login"
+echo ""
+echo "🤖  Codex is installed. To authenticate, set your API key:"
+echo ""
+echo "      export OPENAI_API_KEY=<your-key>"
+echo "      # Add to ~/.bashrc to persist across sessions"
 echo ""
 echo "✅  Container ready!"
 echo ""
