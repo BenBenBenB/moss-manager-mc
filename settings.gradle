@@ -9,4 +9,4 @@ pluginManagement {
 	}
 }
 
-include 'mossman-core', 'mossman-tui', 'mossman-gui'
+include 'mossman-core', 'mossman-gui', 'mossman-tui'

@@ -36,6 +36,12 @@ test {
 	useJUnitPlatform()
 }
 
+afterEvaluate {
+	['runClient', 'runServer'].each { taskName ->
+		tasks.findByName(taskName)?.dependsOn(':mossman-gui:remapJar')
+	}
+}
+
 processResources {
 	inputs.property "version", project.version
 	filesMatching("fabric.mod.json") {
