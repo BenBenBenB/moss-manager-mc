@@ -14,6 +14,14 @@
             "onAutoForward": "silent"
         }
     },
+    // WSLg display forwarding — Minecraft window appears on the Windows desktop.
+    // Requires Windows 11 with WSLg; /tmp/.X11-unix and /mnt/wslg must exist in WSL2.
+    "containerEnv": {
+        "DISPLAY": ":0",
+        "WAYLAND_DISPLAY": "wayland-0",
+        "XDG_RUNTIME_DIR": "/mnt/wslg/runtime-dir",
+        "PULSE_SERVER": "/mnt/wslg/PulseServer"
+    },
     "customizations": {
         "vscode": {
             "extensions": [
@@ -56,8 +64,9 @@
         "source=mcmod-gradle-cache,target=/home/mcdev/.gradle,type=volume",
         "source=mcmod-maven-cache,target=/home/mcdev/.m2,type=volume",
         "source=mcmod-npm-cache,target=/home/mcdev/.npm,type=volume",
-        "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-        "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-        "source=codex-config-${devcontainerId},target=/home/mcdev/.codex,type=volume"
-    ]
+        "source=${localEnv:HOME}/.claude,target=/home/mcdev/.claude,type=bind,consistency=cached",
+        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind,consistency=cached",
+        "source=/mnt/wslg,target=/mnt/wslg,type=bind,consistency=cached"
+    ],
+    "postStartCommand": "bash .devcontainer/wslg-setup.sh"
 }

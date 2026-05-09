@@ -55,10 +55,14 @@ Because `mossman-tui` and `mossman-gui` depend on the `mossman-core` JAR at Grad
 
 ### Client (singleplayer)
 
+`mossman-tui` loads `mossman-gui` at runtime via `modLocalRuntime`. Build both dependencies first:
+
 ```bash
-./gradlew :mossman-core:build
+./gradlew :mossman-core:build :mossman-gui:build
 ./gradlew :mossman-tui:runClient
 ```
+
+After the first build, `runClient` rebuilds `mossman-gui` automatically before launching.
 
 ### Server (multiplayer / headless)
 
@@ -69,7 +73,7 @@ Because `mossman-tui` and `mossman-gui` depend on the `mossman-core` JAR at Grad
 
 On first run you will be prompted to accept the Minecraft EULA. Edit `mossman-tui/run/eula.txt` and set `eula=true`.
 
-### Running with the GUI module
+### Running the GUI module standalone
 
 ```bash
 ./gradlew :mossman-core:build
@@ -135,6 +139,50 @@ Want to add an alternative interface (e.g. a web API, a Discord bot mod)? Depend
 3. In `mossman-web/build.gradle`, declare: `modImplementation project(':mossman-core')`
 4. Build core first before running your new module.
 5. In your mod's `onInitialize()`, use `MossManApi.getXxx()` to access use cases and repositories, and `MossManApi.getEventBus()` to subscribe to domain events.
+
+---
+
+## Dev Container: displaying the Minecraft client
+
+The dev container has no display by default. On **Windows 11 with WSLg**, the Minecraft window can appear natively on your Windows desktop using the WSLg display socket.
+
+The `.devcontainer` configuration already mounts the WSLg sockets and sets the required display environment variables. To activate it:
+
+1. **Rebuild the container** — in VS Code: `Ctrl+Shift+P` → **Dev Containers: Rebuild Container**.
+2. Run the client as normal:
+   ```bash
+   ./gradlew :mossman-core:build :mossman-gui:build
+   ./gradlew :mossman-tui:runClient
+   ```
+   The Minecraft window will open on your Windows desktop.
+
+### Verify WSLg is available
+
+Inside the container, check that the display socket was mounted:
+
+```bash
+echo $DISPLAY          # expected: :0
+ls /mnt/wslg           # expected: runtime-dir  PulseServer  ...
+```
+
+If `/mnt/wslg` is missing, WSLg may not be active. From a Windows terminal:
+
+```powershell
+wsl --update
+wsl --shutdown
+```
+
+Then reopen VS Code and rebuild the container.
+
+### Fallback: software rendering
+
+If the window opens but crashes with an OpenGL error, force Mesa software rendering:
+
+```bash
+LIBGL_ALWAYS_SOFTWARE=1 ./gradlew :mossman-tui:runClient
+```
+
+This is slower but works without GPU support.
 
 ---
 

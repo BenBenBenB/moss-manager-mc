@@ -29,6 +29,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     findutils \
     sudo \
+    # X11 client libs + OpenGL for Minecraft runClient via WSLg
+    libx11-6 libxext6 libxi6 libxrandr2 libxrender1 libxtst6 libxcursor1 libxinerama1 \
+    libgl1 libegl1 libgles2 \
+    libasound2t64 libpulse0 \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Set default Java to 21 ───────────────────
