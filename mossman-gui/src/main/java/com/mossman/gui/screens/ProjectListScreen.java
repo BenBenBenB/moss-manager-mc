@@ -75,6 +75,8 @@ public class ProjectListScreen extends Screen {
         }
     }
 
+    Screen getParent() { return parent; }
+
     private void openCreateScreen() {
         client.setScreen(new CreateProjectScreen(this));
     }

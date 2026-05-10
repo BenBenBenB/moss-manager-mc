@@ -110,7 +110,14 @@ public class CreateProjectScreen extends Screen {
     }
 
     private void tryCreate() {
-        if (client.player == null) return;
+        if (client.player == null) {
+            errorMessage = "Not in a world.";
+            return;
+        }
+        if (MossManApi.getCreateProjectUseCase() == null) {
+            errorMessage = "Mod not initialized — join a world first.";
+            return;
+        }
         try {
             MossManApi.getCreateProjectUseCase().execute(
                     Project.builder()
@@ -122,7 +129,10 @@ public class CreateProjectScreen extends Screen {
                     client.player.getUuid(),
                     client.player.getGameProfile().name()
             );
-            client.setScreen(parent);
+            // Navigate to a fresh ProjectListScreen so init() runs and picks up the new project.
+            // Reusing the existing parent would skip init() because screenInitialized=true.
+            Screen grandParent = parent instanceof ProjectListScreen pls ? pls.getParent() : null;
+            client.setScreen(new ProjectListScreen(grandParent));
         } catch (Exception e) {
             errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         }
