@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "moss_manager_mc",
+  "version": "${version}",
+  "name": "Moss Manager MC",
+  "description": "This is an example description! Tell everyone what your mod is about!",
+  "authors": [
+    "Me!"
+  ],
+  "contact": {
+    "homepage": "https://fabricmc.net/",
+    "sources": "https://github.com/FabricMC/fabric-example-mod"
+  },
+  "license": "CC0-1.0",
+  "icon": "assets/moss_manager_mc/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.mossman.fabric.ExampleModFabric"
+    ],
+    "client": [
+      "com.mossman.fabric.client.ExampleModFabricClient"
+    ]
+  },
+  "mixins": [
+    "moss_manager_mc.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": "~1.21.10",
+    "java": ">=21",
+    "architectury": ">=18.0.8",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
