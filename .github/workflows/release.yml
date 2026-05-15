@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify tag matches mod_version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          mod_version="$(grep -E '^mod_version' gradle.properties | sed 's/.*=[[:space:]]*//')"
+          if [ "$tag" != "$mod_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match mod_version=$mod_version in gradle.properties" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+      - name: Stage release jars
+        run: |
+          mkdir -p release-jars
+          v="${GITHUB_REF_NAME#v}"
+          cp "fabric/build/libs/moss_manager_mc-fabric-$v.jar"     release-jars/
+          cp "neoforge/build/libs/moss_manager_mc-neoforge-$v.jar" release-jars/
+          ls -la release-jars/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release-jars/*.jar
+          fail_on_unmatched_files: true
