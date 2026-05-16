@@ -9,6 +9,8 @@ pluginManagement {
 
 rootProject.name = 'moss_manager_mc'
 
+include 'core'
+include 'api'
 include 'common'
 include 'fabric'
 include 'neoforge'
