@@ -39,6 +39,12 @@ dependencies {
 
     common(project(path: ':common', configuration: 'namedElements')) { transitive = false }
     shadowBundle project(path: ':common', configuration: 'transformProductionNeoForge')
+
+    // Pure-Java siblings: bundle their compiled classes into the loader jar.
+    common project(':core')
+    common project(':persistence')
+    shadowBundle project(':core')
+    shadowBundle project(':persistence')
 }
 
 processResources {

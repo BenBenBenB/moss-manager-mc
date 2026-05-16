@@ -1,0 +1,24 @@
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':core')
+
+    // GSON is provided by Minecraft / Fabric Loader at runtime; compiling
+    // against it here avoids bundling a second copy into the production jar.
+    compileOnly 'com.google.code.gson:gson:2.11.0'
+    testRuntimeOnly 'com.google.code.gson:gson:2.11.0'
+
+    testImplementation platform('org.junit:junit-bom:5.11.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}

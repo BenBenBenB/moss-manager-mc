@@ -10,4 +10,10 @@ dependencies {
 
     // Architectury API. This is optional, and you can comment it out if you don't need it.
     modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
+
+    // Pure-Java sibling modules. Bundled into the loader jars via shadowBundle
+    // in fabric/ and neoforge/ — these are compileOnly here so Loom doesn't try
+    // to remap them.
+    compileOnly project(':core')
+    compileOnly project(':persistence')
 }
