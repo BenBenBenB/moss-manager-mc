@@ -8,9 +8,11 @@ An in-game project-management Minecraft mod (tickets, Kanban boards, per-project
 
 ## Current state
 
-- `core/` and `api/` are implemented and untracked-but-stable: domain model, permission evaluator, project/role/status/type/ticket use cases, plus the SPI event types. `./gradlew :core:test` runs 126 tests across 22 suites, all green.
-- `common/` still contains only the generated `ExampleMod` scaffold — no wiring to `core/` yet. `fabric/` and `neoforge/` are unchanged template wrappers (`ExampleModFabric`, `ExampleModNeoForge`). Treat anything `Example*` as scaffolding to be renamed/replaced.
-- Persistence, networking, and the ModernUI screens have not been started.
+- `core/` and `api/` are implemented: domain model, permission evaluator, project/role/status/type/ticket use cases, plus the SPI event types. `./gradlew :core:test` runs 126 tests across 22 suites, all green.
+- `persistence/` is implemented: `JsonProjectRepository` (write-through cache + single-threaded IO executor) and `ProjectJson` (GSON wrapper). `./gradlew :persistence:test` runs 9 tests, all green.
+- `common/` wires `ServerProjects` to Architectury's `LifecycleEvent.SERVER_STARTED`/`SERVER_STOPPING` to build the repo at `<world>/projectmanager/projects/` and tear it down. Entry point: `com.mossman.MossManager#init()`.
+- `fabric/` and `neoforge/` are still thin loader wrappers (`MossManagerFabric`, `MossManagerNeoForge`) — no platform-specific logic yet beyond calling `MossManager.init()`.
+- Networking and the ModernUI screens have not been started.
 
 ## Build & run
 
@@ -33,9 +35,10 @@ A full clean build downloads ~1 GB of dependencies and takes ~3 minutes on a war
 
 - `core/` — **pure Java**. Domain records (`Project`, `Ticket`, `Role`, `TicketStatus`, `TicketType`), permission evaluator, repository interfaces (`ProjectRepository`), and use cases under `usecase/{project,role,status,type,ticket}`. Tests live under `core/src/test/java`, with shared fixtures in `core/src/test/java/com/mossman/core/support/` (notably `InMemoryProjectRepository`). **Zero** Minecraft, Architectury, or ModernUI imports — any such import is a layering violation.
 - `api/` — pure Java SPI for downstream mods. Event types in `api/event/` (`ProjectEvent`, `TicketEvent`) and listener interfaces in `api/spi/`. Same purity rule as `core/`.
-- `common/` — Architectury common module. Will implement `core/`'s repository interfaces against the Minecraft lifecycle, own networking, and host ModernUI screens. Current entry point: `com.mossman.ExampleMod#init()`. Mixin config: `common/src/main/resources/moss_manager_mc.mixins.json`.
-- `fabric/` — Fabric loader wrapper. Calls `ExampleMod.init()` from `ExampleModFabric#onInitialize`. Bundles `common/`'s code into the final jar via the Shadow plugin (`shadowBundle` configuration → `transformProductionFabric`). Manifest: `fabric/src/main/resources/fabric.mod.json`.
-- `neoforge/` — NeoForge loader wrapper, parallel structure to `fabric/`. Manifest: `neoforge/src/main/resources/META-INF/neoforge.mods.toml`.
+- `persistence/` — pure Java. File-backed `ProjectRepository`. Depends on `:core` and on GSON (`compileOnly` — Minecraft ships GSON, so we don't bundle a second copy). Tests live under `persistence/src/test/java`.
+- `common/` — Architectury common module. Owns the Minecraft-side wiring: `ServerProjects` builds a `JsonProjectRepository` per world via the SERVER_STARTED hook. Will also own networking and ModernUI screens. Entry point: `com.mossman.MossManager#init()`. Mixin config: `common/src/main/resources/moss_manager_mc.mixins.json`. `:core` and `:persistence` are `compileOnly` deps here — they're packed into the loader jars via `shadowBundle`, not Loom's namedElements.
+- `fabric/` — Fabric loader wrapper. Calls `MossManager.init()` from `MossManagerFabric#onInitialize`. Bundles `common/`'s code into the final jar via the Shadow plugin (`shadowBundle` configuration → `transformProductionFabric`); `:core` and `:persistence` are added to `shadowBundle` directly. Manifest: `fabric/src/main/resources/fabric.mod.json`.
+- `neoforge/` — NeoForge loader wrapper, parallel structure to `fabric/`. The `@Mod` annotation on `MossManagerNeoForge` carries the mod id — there is no class reference in `neoforge.mods.toml`. Manifest: `neoforge/src/main/resources/META-INF/neoforge.mods.toml`.
 
 The `${version}` placeholder in `fabric.mod.json` and `neoforge.mods.toml` is filled in by `processResources` from `mod_version` in `gradle.properties` — don't hardcode it.
 
@@ -98,4 +101,4 @@ Server is authoritative. Clients hold a synced read-only cache and request chang
 
 ## Mod ID
 
-`moss_manager_mc` (defined as `MOD_ID` in `ExampleMod.java`, mirrored in both loader manifests and `archives_name` in `gradle.properties`). If renaming, update all five locations plus the mixin config filename.
+`moss_manager_mc` (defined as `MOD_ID` in `MossManager.java`, mirrored in both loader manifests and `archives_name` in `gradle.properties`). If renaming, update all five locations plus the mixin config filename.

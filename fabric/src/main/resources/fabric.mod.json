@@ -16,10 +16,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.mossman.fabric.ExampleModFabric"
+      "com.mossman.fabric.MossManagerFabric"
     ],
     "client": [
-      "com.mossman.fabric.client.ExampleModFabricClient"
+      "com.mossman.fabric.client.MossManagerFabricClient"
     ]
   },
   "mixins": [
