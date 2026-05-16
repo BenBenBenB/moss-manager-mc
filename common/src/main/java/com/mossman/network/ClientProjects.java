@@ -16,7 +16,9 @@ import java.util.concurrent.ConcurrentMap;
  * Client-side read-only cache of projects pushed from the server. The UI will
  * read from this; mutations go back over the wire via C2S packets.
  *
- * <p>Loaded class-side only — never touch this from the dedicated server.
+ * <p>The receiver is registered from common init via {@link Packets#register()};
+ * on a dedicated server the registration is a no-op (no client receiver
+ * installed) and {@link #onSyncProject} is never invoked.
  */
 public final class ClientProjects {
 
@@ -25,14 +27,6 @@ public final class ClientProjects {
     private static final ConcurrentMap<String, Project> CACHE = new ConcurrentHashMap<>();
 
     private ClientProjects() {}
-
-    public static void register() {
-        NetworkManager.registerReceiver(
-                NetworkManager.Side.S2C,
-                SyncProjectS2C.TYPE,
-                SyncProjectS2C.CODEC,
-                ClientProjects::onSyncProject);
-    }
 
     public static Optional<Project> find(String projectId) {
         return Optional.ofNullable(CACHE.get(projectId));
@@ -46,7 +40,7 @@ public final class ClientProjects {
         CACHE.clear();
     }
 
-    private static void onSyncProject(SyncProjectS2C packet, NetworkManager.PacketContext ctx) {
+    static void onSyncProject(SyncProjectS2C packet, NetworkManager.PacketContext ctx) {
         Project project;
         try {
             project = JSON.fromJson(packet.projectJson());
