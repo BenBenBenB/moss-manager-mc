@@ -1,5 +1,6 @@
 package com.mossman;
 
+import com.mossman.command.MossmanCommand;
 import com.mossman.network.Packets;
 import com.mossman.network.ServerProjectSync;
 import com.mossman.server.ServerProjects;
@@ -11,5 +12,6 @@ public final class MossManager {
         ServerProjects.register();
         Packets.register();
         ServerProjectSync.register();
+        MossmanCommand.register();
     }
 }
