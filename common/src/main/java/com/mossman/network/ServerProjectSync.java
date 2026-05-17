@@ -6,6 +6,7 @@ import com.mossman.core.permission.PermissionEvaluator;
 import com.mossman.core.usecase.UseCaseException;
 import com.mossman.core.usecase.project.CreateProjectUseCase;
 import com.mossman.network.payload.CreateProjectC2S;
+import com.mossman.network.payload.RemoveProjectS2C;
 import com.mossman.network.payload.SyncProjectS2C;
 import com.mossman.persistence.JsonProjectRepository;
 import com.mossman.persistence.ProjectJson;
@@ -77,6 +78,14 @@ public final class ServerProjectSync {
             if (PermissionEvaluator.has(project, p.getUUID(), Permission.VIEW_PROJECT)) {
                 NetworkManager.sendToPlayer(p, payload);
             }
+        }
+    }
+
+    /** Tells every online player to drop {@code projectId} from their cache. */
+    public static void broadcastRemoval(Iterable<ServerPlayer> players, String projectId) {
+        RemoveProjectS2C payload = new RemoveProjectS2C(projectId);
+        for (ServerPlayer p : players) {
+            NetworkManager.sendToPlayer(p, payload);
         }
     }
 

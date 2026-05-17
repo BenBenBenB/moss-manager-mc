@@ -1,6 +1,7 @@
 package com.mossman.network;
 
 import com.mossman.network.payload.CreateProjectC2S;
+import com.mossman.network.payload.RemoveProjectS2C;
 import com.mossman.network.payload.SyncProjectS2C;
 
 import dev.architectury.networking.NetworkManager;
@@ -29,5 +30,10 @@ public final class Packets {
                 SyncProjectS2C.TYPE,
                 SyncProjectS2C.CODEC,
                 ClientProjects::onSyncProject);
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                RemoveProjectS2C.TYPE,
+                RemoveProjectS2C.CODEC,
+                ClientProjects::onRemoveProject);
     }
 }

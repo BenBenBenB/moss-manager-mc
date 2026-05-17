@@ -1,6 +1,7 @@
 package com.mossman.network;
 
 import com.mossman.core.model.Project;
+import com.mossman.network.payload.RemoveProjectS2C;
 import com.mossman.network.payload.SyncProjectS2C;
 import com.mossman.persistence.ProjectJson;
 
@@ -50,5 +51,9 @@ public final class ClientProjects {
         }
         if (project == null) return;
         ctx.queue(() -> CACHE.put(project.id(), project));
+    }
+
+    static void onRemoveProject(RemoveProjectS2C packet, NetworkManager.PacketContext ctx) {
+        ctx.queue(() -> CACHE.remove(packet.projectId()));
     }
 }
