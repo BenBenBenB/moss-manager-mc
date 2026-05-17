@@ -12,7 +12,7 @@ import java.util.Optional;
 /**
  * Server-side wiring for the project repository. On SERVER_STARTED the world
  * path is resolved, a {@link JsonProjectRepository} is built under
- * {@code <world>/projectmanager/projects/}, and existing projects are loaded
+ * {@code <world>/mossmandata/projects/}, and existing projects are loaded
  * into the cache. On SERVER_STOPPING the executor is drained and shut down.
  */
 public final class ServerProjects {
@@ -32,7 +32,7 @@ public final class ServerProjects {
 
     private static void onStarted(MinecraftServer server) {
         Path worldRoot = server.getWorldPath(LevelResource.ROOT);
-        Path projectsDir = worldRoot.resolve("projectmanager").resolve("projects");
+        Path projectsDir = worldRoot.resolve("mossmandata").resolve("projects");
         JsonProjectRepository repo = new JsonProjectRepository(projectsDir);
         repo.loadAll();
         current = repo;

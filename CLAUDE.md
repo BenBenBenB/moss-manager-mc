@@ -10,7 +10,7 @@ An in-game project-management Minecraft mod (tickets, Kanban boards, per-project
 
 - `core/` and `api/` are implemented: domain model, permission evaluator, project/role/status/type/ticket use cases, plus the SPI event types. `./gradlew :core:test` runs 126 tests across 22 suites, all green.
 - `persistence/` is implemented: `JsonProjectRepository` (write-through cache + single-threaded IO executor) and `ProjectJson` (GSON wrapper). `./gradlew :persistence:test` runs 9 tests, all green.
-- `common/` wires `ServerProjects` to Architectury's `LifecycleEvent.SERVER_STARTED`/`SERVER_STOPPING` to build the repo at `<world>/projectmanager/projects/` and tear it down. Entry point: `com.mossman.MossManager#init()`.
+- `common/` wires `ServerProjects` to Architectury's `LifecycleEvent.SERVER_STARTED`/`SERVER_STOPPING` to build the repo at `<world>/mossmandata/projects/` and tear it down. Entry point: `com.mossman.MossManager#init()`.
 - `fabric/` and `neoforge/` are still thin loader wrappers (`MossManagerFabric`, `MossManagerNeoForge`) — no platform-specific logic yet beyond calling `MossManager.init()`.
 - Networking and the ModernUI screens have not been started.
 
@@ -69,7 +69,7 @@ If you ever see the older `AccessLevel { NONE, VIEW, EDIT, ADMIN }` enum referen
 
 To be implemented in `common/`. Requirements:
 
-- **Location:** under the active world save, at `[world_root]/projectmanager/projects/[project_id].json`.
+- **Location:** under the active world save, at `[world_root]/mossmandata/projects/[project_id].json`.
 - **Threading:** a dedicated single-threaded executor (`Executors.newSingleThreadExecutor()`) so all IO is serialized off the main thread — no main-thread lag, no write races.
 - **Serialization:** GSON or Jackson, formatted JSON, mapping straight to the `core/` records.
 - **Lifecycle:** hook Architectury's `LifecycleEvent.SERVER_STARTED` to resolve the world path via `server.getWorldPath(LevelResource.ROOT)`, initialize directories, and load all projects into the in-memory cache so cross-project queries (e.g. a global "My Tasks" view) are instant.

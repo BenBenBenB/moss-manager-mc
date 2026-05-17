@@ -139,7 +139,7 @@
   <li>Note the world folder: default for runClient is
     <code>run/saves/&lt;world-name&gt;/</code>.</li>
   <li>The project store lives at
-    <code>&lt;world&gt;/projectmanager/projects/&lt;id&gt;.json</code>. You'll
+    <code>&lt;world&gt;/mossmandata/projects/&lt;id&gt;.json</code>. You'll
     peek at this once to discover the random UUIDs that
     <code>Project.create</code> generates for the default roles, statuses,
     and types.</li>
@@ -166,7 +166,7 @@
       <td class="expected"><code>No projects you can view.</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.2"></td><td>1.2</td>
       <td class="command"><code>/mossman create alpha My Demo</code></td>
-      <td class="expected"><code>Created project alpha</code> &nbsp;·&nbsp; <code>alpha.json</code> appears in <code>projectmanager/projects/</code></td></tr>
+      <td class="expected"><code>Created project alpha</code> &nbsp;·&nbsp; <code>alpha.json</code> appears in <code>mossmandata/projects/</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.3"></td><td>1.3</td>
       <td class="command"><code>/mossman create alpha Dup</code></td>
       <td class="expected warn"><code>project already exists: alpha</code></td></tr>
@@ -195,7 +195,7 @@
 <h2>Discovering UUIDs (one-time)</h2>
 <ol>
   <li>Open
-    <code>run/saves/&lt;world&gt;/projectmanager/projects/alpha.json</code>
+    <code>run/saves/&lt;world&gt;/mossmandata/projects/alpha.json</code>
     in a text editor (the world can stay running — writes are atomic).</li>
   <li>From <code>roles</code>: note the four <code>id</code>s in order —
     <strong>Admin</strong>, <strong>Editor</strong>, <strong>Viewer</strong>,
