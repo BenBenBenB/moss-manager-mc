@@ -422,7 +422,8 @@ public final class MossmanCommand {
                 return 0;
             }
             report(source, "== " + p.id() + " — " + p.name() + " ==");
-            report(source, "Owner: " + p.ownerUuid());
+            source.sendSuccess(() -> Component.literal("Owner: ")
+                    .append(ChatHelpers.playerName(source.getServer(), p.ownerUuid())), false);
             report(source, "Allow non-members: " + p.allowNonMembers());
             report(source, "Roles: " + p.roles().size());
             report(source, "Statuses: " + p.statuses().size());
