@@ -25,7 +25,7 @@ class TicketUseCasesTest {
     }
 
     private Ticket seedTicket(Project p, UUID assignee) {
-        Ticket t = new Ticket(UUID.randomUUID(), "T", "", assignee,
+        Ticket t = new Ticket(UUID.randomUUID(), 1, "T", "", assignee,
                 p.statuses().get(0).id(), p.types().get(0).id(), 0L);
         repo.save(p.addTicket(t));
         return t;
@@ -81,7 +81,7 @@ class TicketUseCasesTest {
     @Test
     void updateDeniedForViewer() {
         Project p = Projects.assignByName(Projects.seeded(Players.OWNER), Players.STRANGER, "Viewer");
-        Ticket t = new Ticket(UUID.randomUUID(), "T", "", null,
+        Ticket t = new Ticket(UUID.randomUUID(), 1, "T", "", null,
                 p.statuses().get(0).id(), p.types().get(0).id(), 0L);
         repo.save(p.addTicket(t));
         assertThrows(PermissionDeniedException.class,

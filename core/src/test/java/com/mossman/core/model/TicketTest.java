@@ -15,38 +15,38 @@ class TicketTest {
     @Test
     void rejectsNullRequiredFields() {
         assertThrows(NullPointerException.class,
-                () -> new Ticket(null, "t", "d", null, statusId, typeId, 0L));
+                () -> new Ticket(null, 1,"t", "d", null, statusId, typeId, 0L));
         assertThrows(NullPointerException.class,
-                () -> new Ticket(id, null, "d", null, statusId, typeId, 0L));
+                () -> new Ticket(id, 1,null, "d", null, statusId, typeId, 0L));
         assertThrows(NullPointerException.class,
-                () -> new Ticket(id, "t", "d", null, null, typeId, 0L));
+                () -> new Ticket(id, 1,"t", "d", null, null, typeId, 0L));
         assertThrows(NullPointerException.class,
-                () -> new Ticket(id, "t", "d", null, statusId, null, 0L));
+                () -> new Ticket(id, 1,"t", "d", null, statusId, null, 0L));
     }
 
     @Test
     void rejectsBlankTitle() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Ticket(id, "", "d", null, statusId, typeId, 0L));
+                () -> new Ticket(id, 1,"", "d", null, statusId, typeId, 0L));
         assertThrows(IllegalArgumentException.class,
-                () -> new Ticket(id, "   ", "d", null, statusId, typeId, 0L));
+                () -> new Ticket(id, 1,"   ", "d", null, statusId, typeId, 0L));
     }
 
     @Test
     void nullDescriptionNormalizesToEmpty() {
-        Ticket t = new Ticket(id, "t", null, null, statusId, typeId, 0L);
+        Ticket t = new Ticket(id, 1,"t", null, null, statusId, typeId, 0L);
         assertEquals("", t.description());
     }
 
     @Test
     void assigneeIsNullable() {
-        Ticket t = new Ticket(id, "t", "d", null, statusId, typeId, 0L);
+        Ticket t = new Ticket(id, 1,"t", "d", null, statusId, typeId, 0L);
         assertNull(t.assigneeUuid());
     }
 
     @Test
     void withMethodsPreserveOtherFields() {
-        Ticket t = new Ticket(id, "old", "desc", null, statusId, typeId, 100L);
+        Ticket t = new Ticket(id, 1,"old", "desc", null, statusId, typeId, 100L);
         UUID newStatus = UUID.randomUUID();
         UUID newType = UUID.randomUUID();
         UUID newAssignee = UUID.randomUUID();

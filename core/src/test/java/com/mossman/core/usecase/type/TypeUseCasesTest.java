@@ -62,7 +62,7 @@ class TypeUseCasesTest {
         UUID typeToDelete = base.types().get(0).id();
         UUID replacement  = base.types().get(1).id();
         UUID statusId     = base.statuses().get(0).id();
-        Ticket t = new Ticket(UUID.randomUUID(), "T", "", null, statusId, typeToDelete, 0L);
+        Ticket t = new Ticket(UUID.randomUUID(), 1, "T", "", null, statusId, typeToDelete, 0L);
         repo.save(base.addTicket(t));
 
         new DeleteTypeUseCase(repo).execute(Players.OWNER, "test", typeToDelete, replacement);

@@ -102,8 +102,8 @@ class ProjectTest {
         UUID realStatus = p.statuses().get(0).id();
         UUID badType = UUID.randomUUID();
 
-        Ticket badStatusTicket = new Ticket(UUID.randomUUID(), "t", "", null, badStatus, realType, 0L);
-        Ticket badTypeTicket = new Ticket(UUID.randomUUID(), "t", "", null, realStatus, badType, 0L);
+        Ticket badStatusTicket = new Ticket(UUID.randomUUID(), 1,"t", "", null, badStatus, realType, 0L);
+        Ticket badTypeTicket = new Ticket(UUID.randomUUID(), 1,"t", "", null, realStatus, badType, 0L);
 
         assertThrows(IllegalArgumentException.class, () -> p.withTickets(List.of(badStatusTicket)));
         assertThrows(IllegalArgumentException.class, () -> p.withTickets(List.of(badTypeTicket)));
@@ -146,7 +146,7 @@ class ProjectTest {
         Project p = Projects.seeded(Players.OWNER);
         UUID statusId = p.statuses().get(0).id();
         UUID typeId = p.types().get(0).id();
-        Ticket t = new Ticket(UUID.randomUUID(), "Hi", "", null, statusId, typeId, 0L);
+        Ticket t = new Ticket(UUID.randomUUID(), 1,"Hi", "", null, statusId, typeId, 0L);
 
         Project p2 = p.addTicket(t);
         assertEquals(1, p2.tickets().size());

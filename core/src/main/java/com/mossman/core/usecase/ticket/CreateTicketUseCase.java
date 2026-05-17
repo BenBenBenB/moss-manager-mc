@@ -43,8 +43,13 @@ public final class CreateTicketUseCase {
             throw new NotFoundException(NotFoundException.Kind.TYPE, typeId.toString());
         }
 
+        int nextNumber = project.tickets().stream()
+                .mapToInt(Ticket::number)
+                .max()
+                .orElse(0) + 1;
         Ticket ticket = new Ticket(
                 idSupplier.get(),
+                nextNumber,
                 title,
                 description,
                 assignee,

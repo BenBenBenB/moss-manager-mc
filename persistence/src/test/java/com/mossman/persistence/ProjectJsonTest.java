@@ -24,6 +24,7 @@ class ProjectJsonTest {
         Project original = Project.create("p2", "With Ticket", UUID.randomUUID());
         Ticket ticket = new Ticket(
                 UUID.randomUUID(),
+                1,
                 "Fix the thing",
                 "longer description",
                 UUID.randomUUID(),
