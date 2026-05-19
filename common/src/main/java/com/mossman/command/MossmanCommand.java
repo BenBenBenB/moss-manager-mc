@@ -50,7 +50,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.CompoundTagArgument;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.NbtTagArgument;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -222,15 +225,14 @@ public final class MossmanCommand {
                                                         StringArgumentType.getString(ctx, "role"),
                                                         EntityArgument.getPlayer(ctx, "player")))))))
                 .then(Commands.literal("reorder")
-                        // No tab completion on multi-token greedy strings; names
-                        // with spaces aren't supported via this path — rename
-                        // first or use a single-word alias.
+                        // SNBT list of names, e.g. ["Admin","Editor","Viewer","Everyone"].
+                        // Multi-word names work via standard SNBT string quoting.
                         .then(projectIdArg()
-                                .then(Commands.argument("orderedNames", StringArgumentType.greedyString())
+                                .then(Commands.argument("order", NbtTagArgument.nbtTag())
                                         .executes(ctx -> runRoleReorder(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
-                                                StringArgumentType.getString(ctx, "orderedNames"))))));
+                                                NbtTagArgument.getNbtTag(ctx, "order"))))));
     }
 
     // ===== status subtree ===============================================
@@ -269,11 +271,11 @@ public final class MossmanCommand {
                                                         StringArgumentType.getString(ctx, "replacement")))))))
                 .then(Commands.literal("reorder")
                         .then(projectIdArg()
-                                .then(Commands.argument("orderedNames", StringArgumentType.greedyString())
+                                .then(Commands.argument("order", NbtTagArgument.nbtTag())
                                         .executes(ctx -> runStatusReorder(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
-                                                StringArgumentType.getString(ctx, "orderedNames"))))));
+                                                NbtTagArgument.getNbtTag(ctx, "order"))))));
     }
 
     // ===== type subtree (parallel to status) ============================
@@ -309,11 +311,11 @@ public final class MossmanCommand {
                                                         StringArgumentType.getString(ctx, "replacement")))))))
                 .then(Commands.literal("reorder")
                         .then(projectIdArg()
-                                .then(Commands.argument("orderedNames", StringArgumentType.greedyString())
+                                .then(Commands.argument("order", NbtTagArgument.nbtTag())
                                         .executes(ctx -> runTypeReorder(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
-                                                StringArgumentType.getString(ctx, "orderedNames"))))));
+                                                NbtTagArgument.getNbtTag(ctx, "order"))))));
     }
 
     // ===== ticket subtree ===============================================
@@ -550,13 +552,13 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runRoleReorder(CommandSourceStack source, String projectId, String orderedNames) {
+    private static int runRoleReorder(CommandSourceStack source, String projectId, Tag order) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            List<UUID> order = parseRoleOrder(current, orderedNames);
-            new ReorderRolesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, order);
+            List<UUID> ids = parseNameList(order, name -> resolveRole(current, name).id());
+            new ReorderRolesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, ids);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Reordered " + order.size() + " role(s)");
+            return Result.broadcast(updated, "Reordered " + ids.size() + " role(s)");
         });
     }
 
@@ -603,13 +605,13 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runStatusReorder(CommandSourceStack source, String projectId, String orderedNames) {
+    private static int runStatusReorder(CommandSourceStack source, String projectId, Tag order) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            List<UUID> order = parseStatusOrder(current, orderedNames);
-            new ReorderStatusesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, order);
+            List<UUID> ids = parseNameList(order, name -> resolveStatus(current, name).id());
+            new ReorderStatusesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, ids);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Reordered " + order.size() + " status(es)");
+            return Result.broadcast(updated, "Reordered " + ids.size() + " status(es)");
         });
     }
 
@@ -656,13 +658,13 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runTypeReorder(CommandSourceStack source, String projectId, String orderedNames) {
+    private static int runTypeReorder(CommandSourceStack source, String projectId, Tag order) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            List<UUID> order = parseTypeOrder(current, orderedNames);
-            new ReorderTypesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, order);
+            List<UUID> ids = parseNameList(order, name -> resolveType(current, name).id());
+            new ReorderTypesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, ids);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Reordered " + order.size() + " type(s)");
+            return Result.broadcast(updated, "Reordered " + ids.size() + " type(s)");
         });
     }
 
@@ -828,29 +830,17 @@ public final class MossmanCommand {
                         "no ticket #" + number + " in project '" + project.id() + "'"));
     }
 
-    private static List<UUID> parseRoleOrder(Project project, String input) {
-        List<UUID> out = new ArrayList<>();
-        for (String tok : input.trim().split("\\s+")) {
-            if (tok.isEmpty()) continue;
-            out.add(resolveRole(project, tok).id());
+    private static List<UUID> parseNameList(Tag tag, java.util.function.Function<String, UUID> resolveToId) {
+        if (!(tag instanceof ListTag list)) {
+            throw new IllegalArgumentException("expected an SNBT list of names, e.g. [\"Admin\",\"Editor\",...]");
         }
-        return out;
-    }
-
-    private static List<UUID> parseStatusOrder(Project project, String input) {
-        List<UUID> out = new ArrayList<>();
-        for (String tok : input.trim().split("\\s+")) {
-            if (tok.isEmpty()) continue;
-            out.add(resolveStatus(project, tok).id());
-        }
-        return out;
-    }
-
-    private static List<UUID> parseTypeOrder(Project project, String input) {
-        List<UUID> out = new ArrayList<>();
-        for (String tok : input.trim().split("\\s+")) {
-            if (tok.isEmpty()) continue;
-            out.add(resolveType(project, tok).id());
+        List<UUID> out = new ArrayList<>(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            final int idx = i;
+            String name = list.getString(i)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "expected a string at index " + idx + " of the order list"));
+            out.add(resolveToId.apply(name));
         }
         return out;
     }
