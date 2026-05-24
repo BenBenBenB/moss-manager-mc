@@ -66,6 +66,21 @@ public final class ChatHelpers {
         return text;
     }
 
+    /** Applies an RGB color (int) to {@code text}. */
+    public static MutableComponent applyColor(MutableComponent text, int rgb) {
+        return text.withStyle(s -> s.withColor(rgb & 0xFFFFFF));
+    }
+
+    /** Formats an int as {@code #RRGGBB}. */
+    public static String hex(int rgb) {
+        return "#" + String.format("%06X", rgb & 0xFFFFFF);
+    }
+
+    /** Component that displays {@code #RRGGBB} rendered in that color. */
+    public static MutableComponent colorSwatch(int rgb) {
+        return applyColor(Component.literal(hex(rgb)), rgb);
+    }
+
     /**
      * Renders a player by their UUID as their in-game name with the full
      * UUID exposed in a hover tooltip. Falls back to a short UUID prefix

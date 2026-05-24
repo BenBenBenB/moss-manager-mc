@@ -538,7 +538,9 @@ public final class MossmanCommand {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
             for (Role r : p.roles()) {
-                reportComponent(source, Component.literal(r.name() + " ")
+                reportComponent(source, Component.empty()
+                        .append(ChatHelpers.applyColor(Component.literal(r.name()), r.color()))
+                        .append(" ")
                         .append(ChatHelpers.createRunLink("[view]",
                                 "/mossman project config role view " + projectId + " " + q(r.name()),
                                 "View role " + r.name(), ChatFormatting.GREEN)));
@@ -563,8 +565,10 @@ public final class MossmanCommand {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
             Role r = resolveRole(p, roleName);
-            report(source, "== Role: " + r.name() + " ==");
-            report(source, "Color: #" + String.format("%06X", r.color() & 0xFFFFFF));
+            reportComponent(source, Component.literal("== Role: ")
+                    .append(ChatHelpers.applyColor(Component.literal(r.name()), r.color()))
+                    .append(" =="));
+            reportComponent(source, Component.literal("Color: ").append(ChatHelpers.colorSwatch(r.color())));
             long members = p.memberRoles().values().stream()
                     .filter(set -> set.contains(r.id()))
                     .count();
@@ -764,7 +768,9 @@ public final class MossmanCommand {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
             for (TicketStatus s : p.statuses()) {
-                reportComponent(source, Component.literal(s.name() + " ")
+                reportComponent(source, Component.empty()
+                        .append(ChatHelpers.applyColor(Component.literal(s.name()), s.textColor()))
+                        .append(" ")
                         .append(ChatHelpers.createRunLink("[view]",
                                 "/mossman project config status view " + projectId + " " + q(s.name()),
                                 "View status " + s.name(), ChatFormatting.GREEN)));
@@ -789,9 +795,13 @@ public final class MossmanCommand {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
             TicketStatus s = resolveStatus(p, statusName);
-            report(source, "== Status: " + s.name() + " ==");
-            report(source, "Text color: #" + String.format("%06X", s.textColor() & 0xFFFFFF));
-            report(source, "Background:  #" + String.format("%06X", s.backgroundColor() & 0xFFFFFF));
+            reportComponent(source, Component.literal("== Status: ")
+                    .append(ChatHelpers.applyColor(Component.literal(s.name()), s.textColor()))
+                    .append(" =="));
+            reportComponent(source, Component.literal("Text color: ")
+                    .append(ChatHelpers.colorSwatch(s.textColor())));
+            reportComponent(source, Component.literal("Background:  ")
+                    .append(ChatHelpers.colorSwatch(s.backgroundColor())));
             long tickets = p.tickets().stream().filter(t -> t.statusId().equals(s.id())).count();
             report(source, "Tickets in this status: " + tickets);
             String qName = q(s.name());
@@ -882,7 +892,9 @@ public final class MossmanCommand {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
             for (TicketType t : p.types()) {
-                reportComponent(source, Component.literal(t.name() + " ")
+                reportComponent(source, Component.empty()
+                        .append(ChatHelpers.applyColor(Component.literal(t.name()), t.textColor()))
+                        .append(" ")
                         .append(ChatHelpers.createRunLink("[view]",
                                 "/mossman project config type view " + projectId + " " + q(t.name()),
                                 "View type " + t.name(), ChatFormatting.GREEN)));
@@ -907,9 +919,13 @@ public final class MossmanCommand {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
             TicketType t = resolveType(p, typeName);
-            report(source, "== Type: " + t.name() + " ==");
-            report(source, "Text color: #" + String.format("%06X", t.textColor() & 0xFFFFFF));
-            report(source, "Background:  #" + String.format("%06X", t.backgroundColor() & 0xFFFFFF));
+            reportComponent(source, Component.literal("== Type: ")
+                    .append(ChatHelpers.applyColor(Component.literal(t.name()), t.textColor()))
+                    .append(" =="));
+            reportComponent(source, Component.literal("Text color: ")
+                    .append(ChatHelpers.colorSwatch(t.textColor())));
+            reportComponent(source, Component.literal("Background:  ")
+                    .append(ChatHelpers.colorSwatch(t.backgroundColor())));
             long tickets = p.tickets().stream().filter(tk -> tk.typeId().equals(t.id())).count();
             report(source, "Tickets of this type: " + tickets);
             String qName = q(t.name());
