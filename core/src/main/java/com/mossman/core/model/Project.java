@@ -188,6 +188,34 @@ public record Project(
                 roles, memberRoles, statuses, types, tickets, next);
     }
 
+    /**
+     * Atomic update of {@code roles} and {@code memberRoles} together. Required
+     * when removing a role: chaining {@code withRoles(...).withMemberRoles(...)}
+     * would re-validate after the first step and reject the intermediate state
+     * because {@code memberRoles} still references the removed role.
+     */
+    public Project withRolesAndMembers(List<Role> newRoles, Map<UUID, Set<UUID>> newMemberRoles) {
+        return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
+                newRoles, newMemberRoles, statuses, types, tickets, nextTicketNumber);
+    }
+
+    /**
+     * Atomic update of {@code statuses} and {@code tickets} together. Required
+     * when deleting a status: chaining {@code withStatuses(...).withTickets(...)}
+     * would re-validate after the first step and reject tickets that still
+     * reference the deleted status.
+     */
+    public Project withStatusesAndTickets(List<TicketStatus> newStatuses, List<Ticket> newTickets) {
+        return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
+                roles, memberRoles, newStatuses, types, newTickets, nextTicketNumber);
+    }
+
+    /** Atomic update of {@code types} and {@code tickets} together. See {@link #withStatusesAndTickets}. */
+    public Project withTypesAndTickets(List<TicketType> newTypes, List<Ticket> newTickets) {
+        return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
+                roles, memberRoles, statuses, newTypes, newTickets, nextTicketNumber);
+    }
+
     public Project addTicket(Ticket ticket) {
         List<Ticket> next = new ArrayList<>(tickets);
         next.add(ticket);

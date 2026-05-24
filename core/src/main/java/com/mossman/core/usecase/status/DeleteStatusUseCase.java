@@ -51,18 +51,6 @@ public final class DeleteStatusUseCase {
             nextTickets.add(t.statusId().equals(statusId) ? t.withStatus(replacementStatusId) : t);
         }
 
-        Project updated = new Project(
-                project.id(),
-                project.name(),
-                project.ownerUuid(),
-                project.defaultRoleId(),
-                project.allowNonMembers(),
-                project.roles(),
-                project.memberRoles(),
-                nextStatuses,
-                project.types(),
-                nextTickets,
-                project.nextTicketNumber());
-        repository.save(updated);
+        repository.save(project.withStatusesAndTickets(nextStatuses, nextTickets));
     }
 }

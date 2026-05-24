@@ -7,7 +7,6 @@ import com.mossman.core.usecase.NotFoundException;
 import com.mossman.core.usecase.ValidationException;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,18 +49,6 @@ public final class DeleteRoleUseCase {
             }
         }
 
-        Project updated = new Project(
-                project.id(),
-                project.name(),
-                project.ownerUuid(),
-                project.defaultRoleId(),
-                project.allowNonMembers(),
-                nextRoles,
-                nextMembers,
-                project.statuses(),
-                project.types(),
-                project.tickets(),
-                project.nextTicketNumber());
-        repository.save(updated);
+        repository.save(project.withRolesAndMembers(nextRoles, nextMembers));
     }
 }

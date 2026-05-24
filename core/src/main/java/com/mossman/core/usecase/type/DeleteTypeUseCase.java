@@ -51,18 +51,6 @@ public final class DeleteTypeUseCase {
             nextTickets.add(t.typeId().equals(typeId) ? t.withType(replacementTypeId) : t);
         }
 
-        Project updated = new Project(
-                project.id(),
-                project.name(),
-                project.ownerUuid(),
-                project.defaultRoleId(),
-                project.allowNonMembers(),
-                project.roles(),
-                project.memberRoles(),
-                project.statuses(),
-                nextTypes,
-                nextTickets,
-                project.nextTicketNumber());
-        repository.save(updated);
+        repository.save(project.withTypesAndTickets(nextTypes, nextTickets));
     }
 }
