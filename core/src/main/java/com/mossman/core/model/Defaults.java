@@ -20,32 +20,34 @@ final class Defaults {
     static final int COLOR_WHITE = 0xFFFFFF;
 
     static Project newProject(String id, String name, UUID owner) {
-        UUID adminId   = UUID.randomUUID();
-        UUID editorId  = UUID.randomUUID();
-        UUID viewerId  = UUID.randomUUID();
         UUID defaultId = UUID.randomUUID();
+        UUID viewerId  = UUID.randomUUID();
+        UUID editorId  = UUID.randomUUID();
+        UUID adminId   = UUID.randomUUID();
 
-        Set<Permission> viewerPerms = Set.of(
+        Set<Permission> viewerGrants = Set.of(
                 Permission.VIEW_PROJECT,
                 Permission.VIEW_TICKETS);
-        Set<Permission> editorPerms = EnumSet.copyOf(viewerPerms);
-        editorPerms.addAll(Set.of(
+        Set<Permission> editorGrants = EnumSet.copyOf(viewerGrants);
+        editorGrants.addAll(Set.of(
                 Permission.CREATE_TICKETS,
                 Permission.EDIT_TICKETS,
                 Permission.ASSIGN_TICKETS,
                 Permission.CHANGE_TICKET_STATUS));
-        Set<Permission> adminPerms = EnumSet.copyOf(editorPerms);
-        adminPerms.addAll(Set.of(
+        Set<Permission> adminGrants = EnumSet.copyOf(editorGrants);
+        adminGrants.addAll(Set.of(
                 Permission.EDIT_PROJECT,
                 Permission.MANAGE_ROLES,
                 Permission.DELETE_TICKETS));
 
-        Role admin   = new Role(adminId,   "Admin",    adminPerms,   COLOR_RED);
-        Role editor  = new Role(editorId,  "Editor",   editorPerms,  COLOR_BLUE);
-        Role viewer  = new Role(viewerId,  "Viewer",   viewerPerms,  COLOR_GRAY);
-        Role defRole = new Role(defaultId, "Everyone", viewerPerms,  COLOR_GRAY);
+        Set<Permission> noDenials = Set.of();
 
-        List<Role> roles = List.of(admin, editor, viewer, defRole);
+        Role defRole = new Role(defaultId, "Default", viewerGrants, noDenials, COLOR_GRAY);
+        Role viewer  = new Role(viewerId,  "Viewer",  viewerGrants, noDenials, COLOR_GRAY);
+        Role editor  = new Role(editorId,  "Editor",  editorGrants, noDenials, COLOR_BLUE);
+        Role admin   = new Role(adminId,   "Admin",   adminGrants,  noDenials, COLOR_RED);
+
+        List<Role> roles = List.of(defRole, viewer, editor, admin);
 
         TicketStatus todo       = new TicketStatus(UUID.randomUUID(), "TODO",        COLOR_WHITE, COLOR_GRAY);
         TicketStatus inProgress = new TicketStatus(UUID.randomUUID(), "In Progress", COLOR_WHITE, COLOR_BLUE);
@@ -70,6 +72,7 @@ final class Defaults {
                 memberRoles,
                 statuses,
                 types,
-                List.of());
+                List.of(),
+                1);
     }
 }

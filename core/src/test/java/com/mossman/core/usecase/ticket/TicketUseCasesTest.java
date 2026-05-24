@@ -153,4 +153,24 @@ class TicketUseCasesTest {
         assertThrows(NotFoundException.class,
                 () -> new DeleteTicketUseCase(repo).execute(Players.OWNER, "test", UUID.randomUUID()));
     }
+
+    @Test
+    void deletingHighestTicketDoesNotReuseItsNumber() {
+        Project p = newProject();
+        CreateTicketUseCase create = new CreateTicketUseCase(repo);
+        Ticket t1 = create.execute(Players.ALICE, "test", "t1", "", null,
+                p.statuses().get(0).id(), p.types().get(0).id());
+        Ticket t2 = create.execute(Players.ALICE, "test", "t2", "", null,
+                p.statuses().get(0).id(), p.types().get(0).id());
+        Ticket t3 = create.execute(Players.ALICE, "test", "t3", "", null,
+                p.statuses().get(0).id(), p.types().get(0).id());
+        assertEquals(1, t1.number());
+        assertEquals(2, t2.number());
+        assertEquals(3, t3.number());
+
+        new DeleteTicketUseCase(repo).execute(Players.OWNER, "test", t3.id());
+        Ticket t4 = create.execute(Players.ALICE, "test", "t4", "", null,
+                p.statuses().get(0).id(), p.types().get(0).id());
+        assertEquals(4, t4.number(), "deleted-max ticket number must not be reused");
+    }
 }

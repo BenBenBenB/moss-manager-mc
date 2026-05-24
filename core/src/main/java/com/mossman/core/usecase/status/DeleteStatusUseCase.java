@@ -61,7 +61,8 @@ public final class DeleteStatusUseCase {
                 project.memberRoles(),
                 nextStatuses,
                 project.types(),
-                nextTickets);
+                nextTickets,
+                project.nextTicketNumber());
         repository.save(updated);
     }
 }

@@ -10,15 +10,15 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-public final class UpdateRolePermissionsUseCase {
+public final class UpdateRoleGrantsUseCase {
 
     private final ProjectRepository repository;
 
-    public UpdateRolePermissionsUseCase(ProjectRepository repository) {
+    public UpdateRoleGrantsUseCase(ProjectRepository repository) {
         this.repository = Objects.requireNonNull(repository);
     }
 
-    public Role execute(UUID actor, String projectId, UUID roleId, Set<Permission> permissions) {
+    public Role execute(UUID actor, String projectId, UUID roleId, Set<Permission> grants) {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(roleId, "roleId");
         Project project = repository.find(projectId)
@@ -27,7 +27,7 @@ public final class UpdateRolePermissionsUseCase {
 
         Role original = project.findRole(roleId)
                 .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.ROLE, roleId.toString()));
-        Role updated = original.withPermissions(permissions);
+        Role updated = original.withGrants(grants);
         repository.save(project.withRoles(RenameRoleUseCase.replace(project.roles(), updated)));
         return updated;
     }

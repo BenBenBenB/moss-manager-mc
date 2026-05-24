@@ -14,43 +14,57 @@ class RoleTest {
     @Test
     void rejectsNullId() {
         assertThrows(NullPointerException.class,
-                () -> new Role(null, "x", Set.of(), 0));
+                () -> new Role(null, "x", Set.of(), Set.of(), 0));
     }
 
     @Test
     void rejectsBlankName() {
         UUID id = UUID.randomUUID();
-        assertThrows(IllegalArgumentException.class, () -> new Role(id, "", Set.of(), 0));
-        assertThrows(IllegalArgumentException.class, () -> new Role(id, "   ", Set.of(), 0));
+        assertThrows(IllegalArgumentException.class, () -> new Role(id, "", Set.of(), Set.of(), 0));
+        assertThrows(IllegalArgumentException.class, () -> new Role(id, "   ", Set.of(), Set.of(), 0));
     }
 
     @Test
-    void permissionsAreDefensivelyCopied() {
+    void grantsAreDefensivelyCopied() {
         Set<Permission> mutable = new HashSet<>(Set.of(Permission.VIEW_PROJECT));
-        Role r = new Role(UUID.randomUUID(), "n", mutable, 0);
+        Role r = new Role(UUID.randomUUID(), "n", mutable, Set.of(), 0);
         mutable.add(Permission.EDIT_PROJECT);
-        assertEquals(Set.of(Permission.VIEW_PROJECT), r.permissions());
+        assertEquals(Set.of(Permission.VIEW_PROJECT), r.grants());
     }
 
     @Test
-    void permissionsAreUnmodifiable() {
-        Role r = new Role(UUID.randomUUID(), "n", Set.of(Permission.VIEW_PROJECT), 0);
+    void grantsAreUnmodifiable() {
+        Role r = new Role(UUID.randomUUID(), "n", Set.of(Permission.VIEW_PROJECT), Set.of(), 0);
         assertThrows(UnsupportedOperationException.class,
-                () -> r.permissions().add(Permission.EDIT_PROJECT));
+                () -> r.grants().add(Permission.EDIT_PROJECT));
     }
 
     @Test
-    void nullPermissionsBecomeEmpty() {
-        Role r = new Role(UUID.randomUUID(), "n", null, 0);
-        assertTrue(r.permissions().isEmpty());
+    void nullGrantsBecomeEmpty() {
+        Role r = new Role(UUID.randomUUID(), "n", null, null, 0);
+        assertTrue(r.grants().isEmpty());
+        assertTrue(r.denials().isEmpty());
+    }
+
+    @Test
+    void grantsAndDenialsMayNotOverlap() {
+        UUID id = UUID.randomUUID();
+        assertThrows(IllegalArgumentException.class,
+                () -> new Role(id, "n",
+                        Set.of(Permission.VIEW_PROJECT, Permission.EDIT_PROJECT),
+                        Set.of(Permission.EDIT_PROJECT),
+                        0));
     }
 
     @Test
     void withMethodsProduceNewInstance() {
-        Role r = new Role(UUID.randomUUID(), "Old", Set.of(Permission.VIEW_PROJECT), 0xFF0000);
+        Role r = new Role(UUID.randomUUID(), "Old",
+                Set.of(Permission.VIEW_PROJECT), Set.of(), 0xFF0000);
         assertEquals("New", r.withName("New").name());
         assertEquals(Set.of(Permission.EDIT_PROJECT),
-                r.withPermissions(Set.of(Permission.EDIT_PROJECT)).permissions());
+                r.withGrants(Set.of(Permission.EDIT_PROJECT)).grants());
+        assertEquals(Set.of(Permission.DELETE_TICKETS),
+                r.withDenials(Set.of(Permission.DELETE_TICKETS)).denials());
         assertEquals(0x00FF00, r.withColor(0x00FF00).color());
     }
 }

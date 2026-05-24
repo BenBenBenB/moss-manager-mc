@@ -27,16 +27,16 @@ public final class CreateRoleUseCase {
         this(repository, UUID::randomUUID);
     }
 
-    public Role execute(UUID actor, String projectId, String name, Set<Permission> permissions, int color) {
+    public Role execute(UUID actor, String projectId, String name, Set<Permission> grants, int color) {
         Objects.requireNonNull(actor, "actor");
         Project project = repository.find(projectId)
                 .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
         RolePermissions.requireManageRoles(project, actor);
 
-        Role role = new Role(idSupplier.get(), name, permissions, color);
+        Role role = new Role(idSupplier.get(), name, grants, Set.of(), color);
         List<Role> next = new ArrayList<>(project.roles());
-        // append above the default (which is the last entry)
-        next.add(next.size() - 1, role);
+        // append at the tail; default sits at index 0 and stays at index 0.
+        next.add(role);
         Project updated = project.withRoles(next);
         repository.save(updated);
         return role;

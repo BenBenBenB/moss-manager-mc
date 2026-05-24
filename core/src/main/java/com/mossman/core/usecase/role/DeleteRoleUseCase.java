@@ -60,7 +60,8 @@ public final class DeleteRoleUseCase {
                 nextMembers,
                 project.statuses(),
                 project.types(),
-                project.tickets());
+                project.tickets(),
+                project.nextTicketNumber());
         repository.save(updated);
     }
 }

@@ -19,7 +19,7 @@ class ReorderRolesUseCaseTest {
     private final ReorderRolesUseCase usecase = new ReorderRolesUseCase(repo);
 
     @Test
-    void reordersAndKeepsDefaultLast() {
+    void reordersAndKeepsDefaultFirst() {
         Project base = Projects.seeded(Players.OWNER);
         repo.save(base);
         UUID adminId  = Projects.roleIdByName(base, "Admin");
@@ -29,10 +29,10 @@ class ReorderRolesUseCaseTest {
         Project after = usecase.execute(Players.OWNER, "test", List.of(viewerId, editorId, adminId));
 
         List<Role> roles = after.roles();
-        assertEquals(viewerId, roles.get(0).id());
-        assertEquals(editorId, roles.get(1).id());
-        assertEquals(adminId,  roles.get(2).id());
-        assertEquals(base.defaultRoleId(), roles.get(3).id());
+        assertEquals(base.defaultRoleId(), roles.get(0).id());
+        assertEquals(viewerId, roles.get(1).id());
+        assertEquals(editorId, roles.get(2).id());
+        assertEquals(adminId,  roles.get(3).id());
     }
 
     @Test

@@ -22,7 +22,8 @@ public record Project(
         Map<UUID, Set<UUID>> memberRoles,
         List<TicketStatus> statuses,
         List<TicketType> types,
-        List<Ticket> tickets
+        List<Ticket> tickets,
+        int nextTicketNumber
 ) {
 
     public Project {
@@ -41,13 +42,13 @@ public record Project(
         if (roles.isEmpty()) {
             throw new IllegalArgumentException("project must have at least the default role");
         }
-        Role last = roles.get(roles.size() - 1);
-        if (!last.id().equals(defaultRoleId)) {
-            throw new IllegalArgumentException("default role must be the last entry of roles");
+        Role first = roles.get(0);
+        if (!first.id().equals(defaultRoleId)) {
+            throw new IllegalArgumentException("default role must be the first entry of roles");
         }
 
         Set<UUID> nonDefaultRoleIds = new HashSet<>();
-        for (int i = 0; i < roles.size() - 1; i++) {
+        for (int i = 1; i < roles.size(); i++) {
             nonDefaultRoleIds.add(roles.get(i).id());
         }
         Set<UUID> allRoleIds = new HashSet<>(nonDefaultRoleIds);
@@ -88,6 +89,7 @@ public record Project(
         }
 
         Set<UUID> ticketIds = new HashSet<>();
+        int maxTicketNumber = 0;
         for (Ticket t : tickets) {
             if (!ticketIds.add(t.id())) {
                 throw new IllegalArgumentException("tickets contains duplicate id: " + t.id());
@@ -100,6 +102,13 @@ public record Project(
                 throw new IllegalArgumentException(
                         "ticket " + t.id() + " references unknown typeId: " + t.typeId());
             }
+            if (t.number() > maxTicketNumber) maxTicketNumber = t.number();
+        }
+
+        if (nextTicketNumber <= maxTicketNumber) {
+            throw new IllegalArgumentException(
+                    "nextTicketNumber " + nextTicketNumber
+                            + " must be greater than the highest existing ticket number " + maxTicketNumber);
         }
     }
 
@@ -128,47 +137,55 @@ public record Project(
     }
 
     public Role defaultRole() {
-        return roles.get(roles.size() - 1);
+        return roles.get(0);
     }
 
     public Project withName(String newName) {
         return new Project(id, newName, ownerUuid, defaultRoleId, allowNonMembers,
-                roles, memberRoles, statuses, types, tickets);
+                roles, memberRoles, statuses, types, tickets, nextTicketNumber);
     }
 
     public Project withOwner(UUID newOwner) {
         return new Project(id, name, newOwner, defaultRoleId, allowNonMembers,
-                roles, memberRoles, statuses, types, tickets);
+                roles, memberRoles, statuses, types, tickets, nextTicketNumber);
     }
 
     public Project withAllowNonMembers(boolean newAllow) {
         return new Project(id, name, ownerUuid, defaultRoleId, newAllow,
-                roles, memberRoles, statuses, types, tickets);
+                roles, memberRoles, statuses, types, tickets, nextTicketNumber);
     }
 
     public Project withRoles(List<Role> newRoles) {
         return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
-                newRoles, memberRoles, statuses, types, tickets);
+                newRoles, memberRoles, statuses, types, tickets, nextTicketNumber);
     }
 
     public Project withMemberRoles(Map<UUID, Set<UUID>> newMemberRoles) {
         return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
-                roles, newMemberRoles, statuses, types, tickets);
+                roles, newMemberRoles, statuses, types, tickets, nextTicketNumber);
     }
 
     public Project withStatuses(List<TicketStatus> newStatuses) {
         return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
-                roles, memberRoles, newStatuses, types, tickets);
+                roles, memberRoles, newStatuses, types, tickets, nextTicketNumber);
     }
 
     public Project withTypes(List<TicketType> newTypes) {
         return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
-                roles, memberRoles, statuses, newTypes, tickets);
+                roles, memberRoles, statuses, newTypes, tickets, nextTicketNumber);
     }
 
     public Project withTickets(List<Ticket> newTickets) {
+        int max = 0;
+        for (Ticket t : newTickets) if (t.number() > max) max = t.number();
+        int newNext = Math.max(nextTicketNumber, max + 1);
         return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
-                roles, memberRoles, statuses, types, newTickets);
+                roles, memberRoles, statuses, types, newTickets, newNext);
+    }
+
+    public Project withNextTicketNumber(int next) {
+        return new Project(id, name, ownerUuid, defaultRoleId, allowNonMembers,
+                roles, memberRoles, statuses, types, tickets, next);
     }
 
     public Project addTicket(Ticket ticket) {
@@ -190,6 +207,67 @@ public record Project(
         }
         if (!found) throw new IllegalArgumentException("no ticket with id " + ticket.id());
         return withTickets(next);
+    }
+
+    /**
+     * Owner placeholder used in template projects. When a template is cloned
+     * via {@link #copyAsNew(String, String, UUID)}, any {@code memberRoles}
+     * entry keyed on this UUID is rewritten to the real owner.
+     */
+    public static final UUID TEMPLATE_OWNER = new UUID(0L, 0L);
+
+    /**
+     * Produces a new project with a fresh id/name/owner that copies this
+     * project's role catalog, status catalog, type catalog, and
+     * allow-non-members flag. Roles, statuses, and types receive fresh UUIDs
+     * so multiple projects spawned from the same template don't collide.
+     * Tickets are not copied; the new project starts empty with
+     * {@code nextTicketNumber=1}.
+     */
+    public Project copyAsNew(String newId, String newName, UUID newOwner) {
+        Map<UUID, UUID> roleMap = new HashMap<>();
+        for (Role r : roles) roleMap.put(r.id(), UUID.randomUUID());
+        UUID newDefaultRoleId = roleMap.get(defaultRoleId);
+
+        List<Role> newRoles = new ArrayList<>(roles.size());
+        for (Role r : roles) {
+            newRoles.add(new Role(roleMap.get(r.id()), r.name(), r.grants(), r.denials(), r.color()));
+        }
+
+        Map<UUID, UUID> statusMap = new HashMap<>();
+        List<TicketStatus> newStatuses = new ArrayList<>(statuses.size());
+        for (TicketStatus s : statuses) {
+            UUID fresh = UUID.randomUUID();
+            statusMap.put(s.id(), fresh);
+            newStatuses.add(new TicketStatus(fresh, s.name(), s.textColor(), s.backgroundColor()));
+        }
+
+        Map<UUID, UUID> typeMap = new HashMap<>();
+        List<TicketType> newTypes = new ArrayList<>(types.size());
+        for (TicketType t : types) {
+            UUID fresh = UUID.randomUUID();
+            typeMap.put(t.id(), fresh);
+            newTypes.add(new TicketType(fresh, t.name(), t.textColor(), t.backgroundColor()));
+        }
+
+        Map<UUID, Set<UUID>> newMemberRoles = new LinkedHashMap<>();
+        for (Map.Entry<UUID, Set<UUID>> e : memberRoles.entrySet()) {
+            UUID key = e.getKey().equals(TEMPLATE_OWNER) ? newOwner : e.getKey();
+            HashSet<UUID> remapped = new HashSet<>();
+            for (UUID rid : e.getValue()) {
+                UUID mapped = roleMap.get(rid);
+                if (mapped != null && !mapped.equals(newDefaultRoleId)) remapped.add(mapped);
+            }
+            if (remapped.isEmpty()) continue;
+            newMemberRoles.merge(key, remapped, (a, b) -> {
+                HashSet<UUID> merged = new HashSet<>(a);
+                merged.addAll(b);
+                return merged;
+            });
+        }
+
+        return new Project(newId, newName, newOwner, newDefaultRoleId, allowNonMembers,
+                newRoles, newMemberRoles, newStatuses, newTypes, List.of(), 1);
     }
 
     public Project removeTicket(UUID ticketId) {

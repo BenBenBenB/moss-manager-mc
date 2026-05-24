@@ -93,13 +93,22 @@ public final class Suggestions {
         };
     }
 
-    /** Suggests every {@link Permission} enum value, for role grant/revoke. */
+    /** Suggests every {@link Permission} enum value, for role setpermission. */
     public static final SuggestionProvider<CommandSourceStack> PERMISSIONS = (ctx, builder) -> {
         String prefix = builder.getRemaining().toLowerCase(Locale.ROOT);
         for (Permission p : Permission.values()) {
             if (p.name().toLowerCase(Locale.ROOT).startsWith(prefix)) {
                 builder.suggest(p.name());
             }
+        }
+        return builder.buildFuture();
+    };
+
+    /** Tri-state level for {@code role setpermission}. */
+    public static final SuggestionProvider<CommandSourceStack> PERMISSION_LEVELS = (ctx, builder) -> {
+        String prefix = builder.getRemaining().toUpperCase(Locale.ROOT);
+        for (String level : new String[] {"GRANT", "DENY", "INHERIT"}) {
+            if (level.startsWith(prefix)) builder.suggest(level);
         }
         return builder.buildFuture();
     };

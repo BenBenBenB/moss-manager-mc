@@ -21,22 +21,22 @@ class ProjectTest {
         // direct canonical-constructor invocations of nulls and blanks
         assertThrows(NullPointerException.class,
                 () -> new Project(null, "n", Players.OWNER, p.defaultRoleId(), true,
-                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets()));
+                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets(), p.nextTicketNumber()));
         assertThrows(IllegalArgumentException.class,
                 () -> new Project(" ", "n", Players.OWNER, p.defaultRoleId(), true,
-                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets()));
+                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets(), p.nextTicketNumber()));
         assertThrows(NullPointerException.class,
                 () -> new Project("id", null, Players.OWNER, p.defaultRoleId(), true,
-                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets()));
+                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets(), p.nextTicketNumber()));
         assertThrows(IllegalArgumentException.class,
                 () -> new Project("id", " ", Players.OWNER, p.defaultRoleId(), true,
-                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets()));
+                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets(), p.nextTicketNumber()));
         assertThrows(NullPointerException.class,
                 () -> new Project("id", "n", null, p.defaultRoleId(), true,
-                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets()));
+                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets(), p.nextTicketNumber()));
         assertThrows(NullPointerException.class,
                 () -> new Project("id", "n", Players.OWNER, null, true,
-                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets()));
+                        p.roles(), p.memberRoles(), p.statuses(), p.types(), p.tickets(), p.nextTicketNumber()));
     }
 
     @Test
@@ -55,12 +55,12 @@ class ProjectTest {
     }
 
     @Test
-    void defaultRoleMustBeLastInList() {
+    void defaultRoleMustBeFirstInList() {
         Project p = Projects.seeded(Players.OWNER);
         List<Role> bad = new ArrayList<>(p.roles());
-        // move default off the bottom
-        Role def = bad.remove(bad.size() - 1);
-        bad.add(0, def);
+        // move default off the top
+        Role def = bad.remove(0);
+        bad.add(def);
         assertThrows(IllegalArgumentException.class, () -> p.withRoles(bad));
     }
 
@@ -102,8 +102,8 @@ class ProjectTest {
         UUID realStatus = p.statuses().get(0).id();
         UUID badType = UUID.randomUUID();
 
-        Ticket badStatusTicket = new Ticket(UUID.randomUUID(), 1,"t", "", null, badStatus, realType, 0L);
-        Ticket badTypeTicket = new Ticket(UUID.randomUUID(), 1,"t", "", null, realStatus, badType, 0L);
+        Ticket badStatusTicket = new Ticket(UUID.randomUUID(), 1, "t", "", null, badStatus, realType, 0L);
+        Ticket badTypeTicket = new Ticket(UUID.randomUUID(), 1, "t", "", null, realStatus, badType, 0L);
 
         assertThrows(IllegalArgumentException.class, () -> p.withTickets(List.of(badStatusTicket)));
         assertThrows(IllegalArgumentException.class, () -> p.withTickets(List.of(badTypeTicket)));
@@ -119,9 +119,9 @@ class ProjectTest {
     @Test
     void seededProjectHasExpectedDefaultsShape() {
         Project p = Projects.seeded(Players.OWNER);
-        // four roles: Admin, Editor, Viewer, Everyone (default)
+        // four roles: Default, Viewer, Editor, Admin (default at index 0)
         assertEquals(4, p.roles().size());
-        assertEquals("Everyone", p.defaultRole().name());
+        assertEquals("Default", p.defaultRole().name());
         // three statuses, four types
         assertEquals(3, p.statuses().size());
         assertEquals(4, p.types().size());
@@ -168,7 +168,7 @@ class ProjectTest {
         UUID adminId = Projects.roleIdByName(p, "Admin");
         List<Role> dupe = new ArrayList<>(p.roles());
         // replace the editor with another role using admin's id
-        dupe.set(1, new Role(adminId, "ImposterEditor", Set.of(), 0));
+        dupe.set(2, new Role(adminId, "ImposterEditor", Set.of(), Set.of(), 0));
         assertThrows(IllegalArgumentException.class, () -> p.withRoles(dupe));
     }
 }

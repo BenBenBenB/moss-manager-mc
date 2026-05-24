@@ -170,7 +170,7 @@
       <td class="expected">Suggests <code>role</code>, <code>status</code>, <code>type</code></td></tr>
     <tr><td><input type="checkbox" data-id="0.4"></td><td>0.4</td>
       <td class="command">After row 1.3, type <code>/mossman project config role update alpha </code> and Tab</td>
-      <td class="expected">Suggests existing role names — <code>Admin</code>, <code>Editor</code>, <code>Viewer</code>, <code>Everyone</code></td></tr>
+      <td class="expected">Suggests existing role names — <code>Default</code>, <code>Viewer</code>, <code>Editor</code>, <code>Admin</code></td></tr>
     <tr><td><input type="checkbox" data-id="0.5"></td><td>0.5</td>
       <td class="command">Type <code>/mossman project config role grant alpha Admin </code> and Tab</td>
       <td class="expected">Suggests every Permission enum value — <code>VIEW_PROJECT</code>, <code>EDIT_PROJECT</code>, <code>MANAGE_ROLES</code>, <code>VIEW_TICKETS</code>, <code>CREATE_TICKETS</code>, <code>EDIT_TICKETS</code>, <code>DELETE_TICKETS</code>, <code>ASSIGN_TICKETS</code>, <code>CHANGE_TICKET_STATUS</code></td></tr>
@@ -219,7 +219,7 @@
   <tbody>
     <tr><td><input type="checkbox" data-id="2.1"></td><td>2.1</td>
       <td class="command"><code>/mossman project config role list alpha</code></td>
-      <td class="expected">Lists <code>Admin</code>, <code>Editor</code>, <code>Viewer</code>, <code>Everyone&nbsp;(default)</code></td></tr>
+      <td class="expected">Lists <code>Default</code>, <code>Viewer</code>, <code>Editor</code>, <code>Admin</code> (default pinned at index 0; higher index = higher priority). Each row has a <code>[view]</code> button.</td></tr>
     <tr><td><input type="checkbox" data-id="2.2"></td><td>2.2</td>
       <td class="command"><code>/mossman project config role view alpha Admin</code></td>
       <td class="expected">Header, hex color, sorted Permissions list, member count</td></tr>
@@ -227,29 +227,29 @@
       <td class="command"><code>/mossman project config role create alpha Reviewer</code></td>
       <td class="expected"><code>Created role Reviewer</code> with default color (white) and no permissions</td></tr>
     <tr><td><input type="checkbox" data-id="2.4"></td><td>2.4</td>
-      <td class="command"><code>/mossman project config role create alpha "Senior Reviewer" {color:0xFFAA00, permissions:["VIEW_PROJECT","VIEW_TICKETS"]}</code></td>
-      <td class="expected"><code>Created role Senior Reviewer</code> with the supplied color + permissions</td></tr>
+      <td class="command"><code>/mossman project config role create alpha "Senior Reviewer" {color:0xFFAA00, grants:["VIEW_PROJECT","VIEW_TICKETS"], denials:["DELETE_TICKETS"]}</code></td>
+      <td class="expected"><code>Created role Senior Reviewer</code> with the supplied color, grants, and denials</td></tr>
     <tr><td><input type="checkbox" data-id="2.5"></td><td>2.5</td>
       <td class="command"><code>/mossman project config role update alpha Reviewer {name:"Casual Reviewer", color:0x00FFFF}</code></td>
       <td class="expected"><code>Updated role Reviewer</code> — both fields change (multi-key patch)</td></tr>
     <tr><td><input type="checkbox" data-id="2.6"></td><td>2.6</td>
-      <td class="command"><code>/mossman project config role grant alpha "Casual Reviewer" EDIT_TICKETS</code></td>
-      <td class="expected"><code>Granted EDIT_TICKETS to Casual Reviewer</code></td></tr>
+      <td class="command"><code>/mossman project config role setpermission alpha "Casual Reviewer" EDIT_TICKETS GRANT</code></td>
+      <td class="expected"><code>Set EDIT_TICKETS for Casual Reviewer → GRANT</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.7"></td><td>2.7</td>
-      <td class="command"><code>/mossman project config role grant alpha "Casual Reviewer" BOGUS</code></td>
+      <td class="command"><code>/mossman project config role setpermission alpha "Casual Reviewer" BOGUS GRANT</code></td>
       <td class="expected warn"><code>unknown permission 'BOGUS'</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.8"></td><td>2.8</td>
-      <td class="command"><code>/mossman project config role revoke alpha "Casual Reviewer" EDIT_TICKETS</code></td>
-      <td class="expected"><code>Revoked EDIT_TICKETS from Casual Reviewer</code></td></tr>
+      <td class="command"><code>/mossman project config role setpermission alpha "Casual Reviewer" EDIT_TICKETS INHERIT</code></td>
+      <td class="expected"><code>Set EDIT_TICKETS for Casual Reviewer → INHERIT</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.9"></td><td>2.9</td>
       <td class="command"><code>/mossman project config role order alpha "Casual Reviewer" 2</code></td>
-      <td class="expected"><code>Moved role Casual Reviewer to position 2</code> · <code>role list</code> reflects new order. <span class="warn">Everyone (default) must stay last.</span></td></tr>
+      <td class="expected"><code>Moved role Casual Reviewer to position 2</code> · <code>role list</code> reflects new order. <span class="warn">Default must stay at index 0.</span></td></tr>
     <tr><td><input type="checkbox" data-id="2.10"></td><td>2.10</td>
-      <td class="command"><code>/mossman project config role order alpha Everyone 1</code></td>
-      <td class="expected warn">Use-case rejection: default role must be last (error message from the core layer)</td></tr>
+      <td class="command"><code>/mossman project config role order alpha Default 1</code></td>
+      <td class="expected warn"><code>cannot reorder the default role; it is pinned at index 0</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.11"></td><td>2.11</td>
       <td class="command"><code>/mossman project config role delete alpha "Casual Reviewer"</code></td>
-      <td class="expected"><code>Deleted role Reviewer</code></td></tr>
+      <td class="expected"><code>Deleted role Casual Reviewer</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.12"></td><td>2.12</td>
       <td class="command multiplayer"><code>/mossman project config role assign alpha Editor &lt;OtherPlayer&gt;</code></td>
       <td class="expected multiplayer"><code>Assigned Editor to &lt;OtherPlayer&gt;</code></td></tr>
@@ -402,6 +402,50 @@
     <tr><td><input type="checkbox" data-id="8.3"></td><td>8.3</td>
       <td class="command multiplayer">A creates a project while B is offline; B then joins</td>
       <td class="expected multiplayer">B's <code>/mossman project list</code> shows the project (PLAYER_JOIN snapshot path)</td></tr>
+  </tbody>
+</table>
+
+<h2>Round 9 — Backlog rework (denials, template, no-reuse, buttons)</h2>
+<p class="muted">Covers the changes from the multi-item backlog: default project template, role-priority denials, ticket-number no-reuse, optional delete replacement, SNBT boolean, and the in-chat button augmentations.</p>
+<table>
+  <thead><tr><th></th><th>#</th><th>Command</th><th>Expected</th></tr></thead>
+  <tbody>
+    <tr><td><input type="checkbox" data-id="9.1"></td><td>9.1</td>
+      <td class="command">Boot a fresh world. Inspect <code>&lt;world&gt;/mossmandata/</code>.</td>
+      <td class="expected"><code>default.json</code> exists alongside <code>projects/</code>. Hand-edit a status name, restart server.</td></tr>
+    <tr><td><input type="checkbox" data-id="9.2"></td><td>9.2</td>
+      <td class="command"><code>/mossman project create p1 First</code> then <code>/mossman project view p1</code></td>
+      <td class="expected">Statuses reflect the edited template; role/status/type UUIDs are fresh (no collision with default.json). View output ends with <code>[update]</code> (yellow) and <code>[delete]</code> (red) buttons.</td></tr>
+    <tr><td><input type="checkbox" data-id="9.3"></td><td>9.3</td>
+      <td class="command"><code>/mossman project update p1 {allowNonMembers:false}</code></td>
+      <td class="expected"><code>Updated project p1</code> · no SNBT error</td></tr>
+    <tr><td><input type="checkbox" data-id="9.4"></td><td>9.4</td>
+      <td class="command"><code>/mossman project config role setpermission p1 Default VIEW_PROJECT GRANT</code> twice in a row</td>
+      <td class="expected">First call succeeds (no <code>Collection is empty</code>). Second errors: <code>role 'Default' already has VIEW_PROJECT at GRANT</code>.</td></tr>
+    <tr><td><input type="checkbox" data-id="9.5"></td><td>9.5</td>
+      <td class="command"><code>/mossman project config role setpermission p1 Default VIEW_TICKETS INHERIT</code> twice</td>
+      <td class="expected">First succeeds. Second errors: <code>role 'Default' already has VIEW_TICKETS at INHERIT</code>.</td></tr>
+    <tr><td><input type="checkbox" data-id="9.6"></td><td>9.6</td>
+      <td class="command">Create a role, <code>config role setpermission p1 R EDIT_TICKETS DENY</code>, then <code>config role order p1 R &lt;last&gt;</code>. Assign to a Member, have them attempt to edit a ticket.</td>
+      <td class="expected">Edit is denied (higher-index role denies overrides lower-index grants from Editor/Default). <code>config role view p1 R</code> shows <code>EDIT_TICKETS: DENIED</code>.</td></tr>
+    <tr><td><input type="checkbox" data-id="9.7"></td><td>9.7</td>
+      <td class="command"><code>/mossman project config role setpermission p1 R EDIT_TICKETS GRANT</code> on a role that already denies it</td>
+      <td class="expected">Succeeds — denial is cleared, grant is added (single command flips the state).</td></tr>
+    <tr><td><input type="checkbox" data-id="9.8"></td><td>9.8</td>
+      <td class="command"><code>/mossman project config status delete p1 TODO "In Progress"</code></td>
+      <td class="expected"><code>Deleted status TODO (tickets moved to In Progress)</code>. Tab-completion suggests remaining statuses for the replacement argument.</td></tr>
+    <tr><td><input type="checkbox" data-id="9.9"></td><td>9.9</td>
+      <td class="command">Create tickets 1, 2, 3. Delete #3. Create another ticket.</td>
+      <td class="expected">New ticket number is #4 (not #3 — counter never reuses).</td></tr>
+    <tr><td><input type="checkbox" data-id="9.10"></td><td>9.10</td>
+      <td class="command"><code>/mossman project view p1</code>, click <code>[update]</code></td>
+      <td class="expected">Chat box prefilled with <code>/mossman project update p1 {}</code> (suggest, not run).</td></tr>
+    <tr><td><input type="checkbox" data-id="9.11"></td><td>9.11</td>
+      <td class="command"><code>/mossman project list</code>, click <code>[view]</code> on a row</td>
+      <td class="expected">Command runs immediately (RUN_COMMAND), full project view appears.</td></tr>
+    <tr><td><input type="checkbox" data-id="9.12"></td><td>9.12</td>
+      <td class="command"><code>/mossman project config role view p1 Default</code>, click any <code>[delete]</code> or destructive button</td>
+      <td class="expected">All destructive buttons use SUGGEST_COMMAND (chat prefilled, never auto-run).</td></tr>
   </tbody>
 </table>
 

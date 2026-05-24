@@ -13,23 +13,23 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class UpdateRolePermissionsUseCaseTest {
+class UpdateRoleGrantsUseCaseTest {
 
     private final InMemoryProjectRepository repo = new InMemoryProjectRepository();
-    private final UpdateRolePermissionsUseCase usecase = new UpdateRolePermissionsUseCase(repo);
+    private final UpdateRoleGrantsUseCase usecase = new UpdateRoleGrantsUseCase(repo);
 
     @Test
-    void adminCanUpdateRegularRolePermissions() {
+    void adminCanUpdateRegularRoleGrants() {
         Project base = Projects.seeded(Players.OWNER);
         repo.save(base);
         UUID editorId = Projects.roleIdByName(base, "Editor");
         Set<Permission> next = Set.of(Permission.VIEW_PROJECT);
         usecase.execute(Players.OWNER, "test", editorId, next);
-        assertEquals(next, repo.find("test").orElseThrow().findRole(editorId).orElseThrow().permissions());
+        assertEquals(next, repo.find("test").orElseThrow().findRole(editorId).orElseThrow().grants());
     }
 
     @Test
-    void onlyOwnerCanUpdateDefaultRolePermissions() {
+    void onlyOwnerCanUpdateDefaultRoleGrants() {
         Project base = Projects.assignByName(Projects.seeded(Players.OWNER), Players.ALICE, "Admin");
         repo.save(base);
         UUID def = base.defaultRoleId();
@@ -37,6 +37,6 @@ class UpdateRolePermissionsUseCaseTest {
                 () -> usecase.execute(Players.ALICE, "test", def, Set.of()));
         usecase.execute(Players.OWNER, "test", def, Set.of(Permission.VIEW_PROJECT));
         assertEquals(Set.of(Permission.VIEW_PROJECT),
-                repo.find("test").orElseThrow().findRole(def).orElseThrow().permissions());
+                repo.find("test").orElseThrow().findRole(def).orElseThrow().grants());
     }
 }

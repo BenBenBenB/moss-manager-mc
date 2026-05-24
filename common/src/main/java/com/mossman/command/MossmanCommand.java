@@ -25,7 +25,8 @@ import com.mossman.core.usecase.role.RenameRoleUseCase;
 import com.mossman.core.usecase.role.ReorderRolesUseCase;
 import com.mossman.core.usecase.role.UnassignRoleUseCase;
 import com.mossman.core.usecase.role.UpdateRoleColorUseCase;
-import com.mossman.core.usecase.role.UpdateRolePermissionsUseCase;
+import com.mossman.core.usecase.role.UpdateRoleDenialsUseCase;
+import com.mossman.core.usecase.role.UpdateRoleGrantsUseCase;
 import com.mossman.core.usecase.status.CreateStatusUseCase;
 import com.mossman.core.usecase.status.DeleteStatusUseCase;
 import com.mossman.core.usecase.status.ReorderStatusesUseCase;
@@ -50,7 +51,9 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.CompoundTagArgument;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -185,26 +188,19 @@ public final class MossmanCommand {
                                                         StringArgumentType.getString(ctx, "projectId"),
                                                         StringArgumentType.getString(ctx, "roleId"),
                                                         IntegerArgumentType.getInteger(ctx, "position")))))))
-                .then(Commands.literal("grant")
+                .then(Commands.literal("setpermission")
                         .then(projectIdArg()
                                 .then(roleIdArg()
                                         .then(Commands.argument("permissionId", StringArgumentType.word())
                                                 .suggests(Suggestions.PERMISSIONS)
-                                                .executes(ctx -> runRoleGrant(
-                                                        ctx.getSource(),
-                                                        StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "roleId"),
-                                                        StringArgumentType.getString(ctx, "permissionId")))))))
-                .then(Commands.literal("revoke")
-                        .then(projectIdArg()
-                                .then(roleIdArg()
-                                        .then(Commands.argument("permissionId", StringArgumentType.word())
-                                                .suggests(Suggestions.PERMISSIONS)
-                                                .executes(ctx -> runRoleRevoke(
-                                                        ctx.getSource(),
-                                                        StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "roleId"),
-                                                        StringArgumentType.getString(ctx, "permissionId")))))))
+                                                .then(Commands.argument("level", StringArgumentType.word())
+                                                        .suggests(Suggestions.PERMISSION_LEVELS)
+                                                        .executes(ctx -> runRoleSetPermission(
+                                                                ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "projectId"),
+                                                                StringArgumentType.getString(ctx, "roleId"),
+                                                                StringArgumentType.getString(ctx, "permissionId"),
+                                                                StringArgumentType.getString(ctx, "level"))))))))
                 .then(Commands.literal("assign")
                         .then(projectIdArg()
                                 .then(roleIdArg()
@@ -260,7 +256,15 @@ public final class MossmanCommand {
                                         .executes(ctx -> runStatusDelete(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
-                                                StringArgumentType.getString(ctx, "statusId"))))))
+                                                StringArgumentType.getString(ctx, "statusId"),
+                                                null))
+                                        .then(Commands.argument("replacementStatusId", StringArgumentType.string())
+                                                .suggests(Suggestions.statusNames("projectId"))
+                                                .executes(ctx -> runStatusDelete(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "statusId"),
+                                                        StringArgumentType.getString(ctx, "replacementStatusId")))))))
                 .then(Commands.literal("update")
                         .then(projectIdArg()
                                 .then(statusIdArg()
@@ -316,7 +320,15 @@ public final class MossmanCommand {
                                         .executes(ctx -> runTypeDelete(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
-                                                StringArgumentType.getString(ctx, "typeId"))))))
+                                                StringArgumentType.getString(ctx, "typeId"),
+                                                null))
+                                        .then(Commands.argument("replacementTypeId", StringArgumentType.string())
+                                                .suggests(Suggestions.typeNames("projectId"))
+                                                .executes(ctx -> runTypeDelete(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "typeId"),
+                                                        StringArgumentType.getString(ctx, "replacementTypeId")))))))
                 .then(Commands.literal("update")
                         .then(projectIdArg()
                                 .then(typeIdArg()
@@ -424,7 +436,10 @@ public final class MossmanCommand {
         }
         visible.stream()
                 .sorted(Comparator.comparing(Project::id))
-                .forEach(p -> report(source, p.id() + " — " + p.name()));
+                .forEach(p -> reportComponent(source, Component.literal(p.id() + " — " + p.name() + " ")
+                        .append(ChatHelpers.createRunLink("[view]",
+                                "/mossman project view " + p.id(),
+                                "View " + p.name(), ChatFormatting.GREEN))));
         return visible.size();
     }
 
@@ -443,17 +458,36 @@ public final class MossmanCommand {
             source.sendSuccess(() -> Component.literal("Owner: ")
                     .append(ChatHelpers.playerName(source.getServer(), p.ownerUuid())), false);
             report(source, "Allow non-members: " + p.allowNonMembers());
-            report(source, "Roles: " + p.roles().size());
-            report(source, "Statuses: " + p.statuses().size());
-            report(source, "Types: " + p.types().size());
+            reportComponent(source, Component.literal("Roles: " + p.roles().size() + " ")
+                    .append(ChatHelpers.createRunLink("[list]",
+                            "/mossman project config role list " + id, "List roles", ChatFormatting.GREEN)));
+            reportComponent(source, Component.literal("Statuses: " + p.statuses().size() + " ")
+                    .append(ChatHelpers.createRunLink("[list]",
+                            "/mossman project config status list " + id, "List statuses", ChatFormatting.GREEN)));
+            reportComponent(source, Component.literal("Types: " + p.types().size() + " ")
+                    .append(ChatHelpers.createRunLink("[list]",
+                            "/mossman project config type list " + id, "List types", ChatFormatting.GREEN)));
             if (p.tickets().isEmpty()) {
                 report(source, "Tickets: 0");
             } else {
-                report(source, "Tickets: " + p.tickets().size());
+                reportComponent(source, Component.literal("Tickets: " + p.tickets().size() + " ")
+                        .append(ChatHelpers.createRunLink("[list]",
+                                "/mossman ticket list " + id, "List tickets", ChatFormatting.GREEN)));
                 p.tickets().stream()
                         .sorted(Comparator.comparingInt(Ticket::number))
-                        .forEach(t -> report(source, "  #" + t.number() + " — " + t.title()));
+                        .forEach(t -> reportComponent(source,
+                                Component.literal("  #" + t.number() + " — " + t.title() + " ")
+                                        .append(ChatHelpers.createRunLink("[view]",
+                                                "/mossman ticket view " + id + " " + t.number(),
+                                                "View ticket #" + t.number(), ChatFormatting.GREEN))));
             }
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[update]",
+                            "/mossman project update " + id + " {}",
+                            "Update project fields", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[delete]",
+                            "/mossman project delete " + id,
+                            "Delete this project", ChatFormatting.RED)));
             return 1;
         } catch (UseCaseException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -463,7 +497,9 @@ public final class MossmanCommand {
 
     private static int runProjectCreate(CommandSourceStack source, String id, String name) {
         return mutation(source, ctx -> {
-            Project created = new CreateProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, name);
+            Project template = ServerProjects.template().orElse(null);
+            Project created = new CreateProjectUseCase(ctx.repo)
+                    .execute(ctx.actor.getUUID(), id, name, template);
             return Result.broadcast(created, "Created project " + created.id());
         });
     }
@@ -480,15 +516,8 @@ public final class MossmanCommand {
             SnbtPatch p = new SnbtPatch(patch);
             p.optionalString("name").ifPresent(name ->
                     new RenameProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, name));
-            if (p.has("allowNonMembers")) {
-                boolean allow = p.optionalString("allowNonMembers")
-                        .map(s -> Boolean.parseBoolean(s))
-                        .orElseGet(() -> p.optionalInt("allowNonMembers")
-                                .map(i -> i != 0)
-                                .orElseThrow(() -> new SnbtPatch.Format(
-                                        "expected boolean for key 'allowNonMembers'")));
-                new SetAllowNonMembersUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, allow);
-            }
+            p.optionalBool("allowNonMembers").ifPresent(allow ->
+                    new SetAllowNonMembersUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, allow));
             p.optionalString("owner").ifPresent(ref -> {
                 UUID newOwner = resolvePlayerRef(source.getServer(), ref);
                 new TransferOwnershipUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, newOwner);
@@ -509,9 +538,15 @@ public final class MossmanCommand {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
             for (Role r : p.roles()) {
-                boolean isDefault = p.defaultRoleId().equals(r.id());
-                report(source, r.name() + (isDefault ? "  (default)" : ""));
+                reportComponent(source, Component.literal(r.name() + " ")
+                        .append(ChatHelpers.createRunLink("[view]",
+                                "/mossman project config role view " + projectId + " " + q(r.name()),
+                                "View role " + r.name(), ChatFormatting.GREEN)));
             }
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[create]",
+                            "/mossman project config role create " + projectId + " ",
+                            "Create a new role", ChatFormatting.YELLOW)));
             return p.roles().size();
         } catch (UseCaseException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -530,19 +565,49 @@ public final class MossmanCommand {
             Role r = resolveRole(p, roleName);
             report(source, "== Role: " + r.name() + " ==");
             report(source, "Color: #" + String.format("%06X", r.color() & 0xFFFFFF));
-            if (r.permissions().isEmpty()) {
-                report(source, "Permissions: (none)");
-            } else {
-                report(source, "Permissions: " + r.permissions().stream()
-                        .map(Permission::name)
-                        .sorted()
-                        .collect(Collectors.joining(", ")));
-            }
             long members = p.memberRoles().values().stream()
                     .filter(set -> set.contains(r.id()))
                     .count();
             report(source, "Members: " + members);
-            if (p.defaultRoleId().equals(r.id())) report(source, "(default role)");
+
+            String qName = q(r.name());
+            String cmdBase = "/mossman project config role";
+            report(source, "Permissions:");
+            for (Permission perm : Permission.values()) {
+                PermissionLevel currentLevel = r.grants().contains(perm) ? PermissionLevel.GRANT
+                        : r.denials().contains(perm) ? PermissionLevel.DENY
+                        : PermissionLevel.INHERIT;
+                String label = currentLevel == PermissionLevel.GRANT ? "GRANTED"
+                        : currentLevel == PermissionLevel.DENY ? "DENIED"
+                        : "inherit";
+                MutableComponent line = Component.literal("  " + perm.name() + ": " + label + " ");
+                for (PermissionLevel level : PermissionLevel.values()) {
+                    if (level == currentLevel) continue;
+                    line.append(ChatHelpers.createSuggestLink("[" + level + "]",
+                            cmdBase + " setpermission " + projectId + " " + qName + " "
+                                    + perm.name() + " " + level,
+                            "Set " + perm.name() + " to " + level + " for " + r.name(),
+                            ChatFormatting.YELLOW));
+                    line.append(" ");
+                }
+                reportComponent(source, line);
+            }
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[update]",
+                            cmdBase + " update " + projectId + " " + qName + " {}",
+                            "Update role fields", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[order]",
+                            cmdBase + " order " + projectId + " " + qName + " ",
+                            "Reorder this role", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[assign]",
+                            cmdBase + " assign " + projectId + " " + qName + " ",
+                            "Assign this role to a player", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[unassign]",
+                            cmdBase + " unassign " + projectId + " " + qName + " ",
+                            "Unassign this role from a player", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[delete]",
+                            cmdBase + " delete " + projectId + " " + qName,
+                            "Delete this role", ChatFormatting.RED)));
             return 1;
         } catch (UseCaseException | IllegalArgumentException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -554,8 +619,14 @@ public final class MossmanCommand {
         return mutation(source, ctx -> {
             SnbtPatch p = patch == null ? new SnbtPatch(new CompoundTag()) : new SnbtPatch(patch);
             int color = p.optionalInt("color").orElse(0xFFFFFF);
-            Set<Permission> perms = p.optionalPermissions("permissions").orElse(Set.of());
-            new CreateRoleUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleName, perms, color);
+            Set<Permission> grants = p.optionalPermissions("grants").orElse(Set.of());
+            Set<Permission> denials = p.optionalPermissions("denials").orElse(Set.of());
+            Role created = new CreateRoleUseCase(ctx.repo)
+                    .execute(ctx.actor.getUUID(), projectId, roleName, grants, color);
+            if (!denials.isEmpty()) {
+                new UpdateRoleDenialsUseCase(ctx.repo)
+                        .execute(ctx.actor.getUUID(), projectId, created.id(), denials);
+            }
             Project updated = ctx.repo.find(projectId).orElseThrow();
             return Result.broadcast(updated, "Created role " + roleName);
         });
@@ -580,6 +651,10 @@ public final class MossmanCommand {
                     new RenameRoleUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleId, name));
             p.optionalInt("color").ifPresent(color ->
                     new UpdateRoleColorUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleId, color));
+            p.optionalPermissions("grants").ifPresent(grants ->
+                    new UpdateRoleGrantsUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleId, grants));
+            p.optionalPermissions("denials").ifPresent(denials ->
+                    new UpdateRoleDenialsUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleId, denials));
             Project updated = ctx.repo.find(projectId).orElseThrow();
             return Result.broadcast(updated, "Updated role " + roleName);
         });
@@ -588,44 +663,74 @@ public final class MossmanCommand {
     private static int runRoleOrder(CommandSourceStack source, String projectId, String roleName, int position) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            UUID roleId = resolveRole(current, roleName).id();
-            List<UUID> order = moveToPosition(
-                    current.roles().stream().map(Role::id).collect(Collectors.toList()),
-                    roleId, position);
-            new ReorderRolesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, order);
+            Role role = resolveRole(current, roleName);
+            if (role.id().equals(current.defaultRoleId())) {
+                throw new IllegalArgumentException("cannot reorder the default role; it is pinned at index 0");
+            }
+            int last = current.roles().size() - 1;
+            if (position < 1 || position > last) {
+                throw new IllegalArgumentException(
+                        "position must be between 1 and " + last + " (inclusive)");
+            }
+            List<UUID> nonDefault = new ArrayList<>();
+            for (int i = 1; i < current.roles().size(); i++) nonDefault.add(current.roles().get(i).id());
+            nonDefault.remove(role.id());
+            nonDefault.add(position - 1, role.id());
+            new ReorderRolesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, nonDefault);
             Project updated = ctx.repo.find(projectId).orElseThrow();
             return Result.broadcast(updated, "Moved role " + roleName + " to position " + position);
         });
     }
 
-    private static int runRoleGrant(CommandSourceStack source, String projectId, String roleName, String permName) {
+    private enum PermissionLevel { GRANT, DENY, INHERIT }
+
+    private static int runRoleSetPermission(CommandSourceStack source, String projectId, String roleName,
+                                            String permName, String levelName) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
             Role role = resolveRole(current, roleName);
             Permission perm = parsePermission(permName);
-            Set<Permission> next = EnumSet.copyOf(role.permissions());
-            next.add(perm);
-            new UpdateRolePermissionsUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, role.id(), next);
+            PermissionLevel target;
+            try {
+                target = PermissionLevel.valueOf(levelName.toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                        "unknown level '" + levelName + "'; expected GRANT, DENY, or INHERIT");
+            }
+
+            PermissionLevel currentLevel = role.grants().contains(perm) ? PermissionLevel.GRANT
+                    : role.denials().contains(perm) ? PermissionLevel.DENY
+                    : PermissionLevel.INHERIT;
+            if (currentLevel == target) {
+                throw new IllegalArgumentException(
+                        "role '" + role.name() + "' already has " + perm.name() + " at " + target);
+            }
+
+            Set<Permission> nextGrants = enumSetOf(role.grants());
+            Set<Permission> nextDenials = enumSetOf(role.denials());
+            nextGrants.remove(perm);
+            nextDenials.remove(perm);
+            if (target == PermissionLevel.GRANT) nextGrants.add(perm);
+            else if (target == PermissionLevel.DENY) nextDenials.add(perm);
+
+            if (!nextGrants.equals(role.grants())) {
+                new UpdateRoleGrantsUseCase(ctx.repo)
+                        .execute(ctx.actor.getUUID(), projectId, role.id(), nextGrants);
+            }
+            if (!nextDenials.equals(role.denials())) {
+                new UpdateRoleDenialsUseCase(ctx.repo)
+                        .execute(ctx.actor.getUUID(), projectId, role.id(), nextDenials);
+            }
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Granted " + perm.name() + " to " + roleName);
+            return Result.broadcast(updated,
+                    "Set " + perm.name() + " for " + roleName + " → " + target);
         });
     }
 
-    private static int runRoleRevoke(CommandSourceStack source, String projectId, String roleName, String permName) {
-        return mutation(source, ctx -> {
-            Project current = requireProject(ctx.repo, projectId);
-            Role role = resolveRole(current, roleName);
-            Permission perm = parsePermission(permName);
-            Set<Permission> next = role.permissions().isEmpty()
-                    ? EnumSet.noneOf(Permission.class)
-                    : EnumSet.copyOf(role.permissions());
-            next.remove(perm);
-            new UpdateRolePermissionsUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, role.id(), next);
-            Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Revoked " + perm.name() + " from " + roleName);
-        });
+    private static Set<Permission> enumSetOf(Set<Permission> src) {
+        return src.isEmpty()
+                ? EnumSet.noneOf(Permission.class)
+                : EnumSet.copyOf(src);
     }
 
     private static int runRoleAssign(CommandSourceStack source, String projectId, String roleName, ServerPlayer target) {
@@ -658,7 +763,16 @@ public final class MossmanCommand {
         try {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
-            for (TicketStatus s : p.statuses()) report(source, s.name());
+            for (TicketStatus s : p.statuses()) {
+                reportComponent(source, Component.literal(s.name() + " ")
+                        .append(ChatHelpers.createRunLink("[view]",
+                                "/mossman project config status view " + projectId + " " + q(s.name()),
+                                "View status " + s.name(), ChatFormatting.GREEN)));
+            }
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[create]",
+                            "/mossman project config status create " + projectId + " ",
+                            "Create a new status", ChatFormatting.YELLOW)));
             return p.statuses().size();
         } catch (UseCaseException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -680,6 +794,17 @@ public final class MossmanCommand {
             report(source, "Background:  #" + String.format("%06X", s.backgroundColor() & 0xFFFFFF));
             long tickets = p.tickets().stream().filter(t -> t.statusId().equals(s.id())).count();
             report(source, "Tickets in this status: " + tickets);
+            String qName = q(s.name());
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[update]",
+                            "/mossman project config status update " + projectId + " " + qName + " {}",
+                            "Update status fields", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[order]",
+                            "/mossman project config status order " + projectId + " " + qName + " ",
+                            "Reorder this status", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[delete]",
+                            "/mossman project config status delete " + projectId + " " + qName,
+                            "Delete this status", ChatFormatting.RED)));
             return 1;
         } catch (UseCaseException | IllegalArgumentException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -698,15 +823,18 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runStatusDelete(CommandSourceStack source, String projectId, String statusName) {
+    private static int runStatusDelete(CommandSourceStack source, String projectId, String statusName,
+                                       String replacementName) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
             TicketStatus toDelete = resolveStatus(current, statusName);
-            TicketStatus replacement = current.statuses().stream()
-                    .filter(s -> !s.id().equals(toDelete.id()))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "cannot delete the only status in '" + projectId + "'"));
+            TicketStatus replacement = replacementName == null
+                    ? current.statuses().stream()
+                            .filter(s -> !s.id().equals(toDelete.id()))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalArgumentException(
+                                    "cannot delete the only status in '" + projectId + "'"))
+                    : resolveStatus(current, replacementName);
             new DeleteStatusUseCase(ctx.repo)
                     .execute(ctx.actor.getUUID(), projectId, toDelete.id(), replacement.id());
             Project updated = ctx.repo.find(projectId).orElseThrow();
@@ -753,7 +881,16 @@ public final class MossmanCommand {
         try {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
                     .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
-            for (TicketType t : p.types()) report(source, t.name());
+            for (TicketType t : p.types()) {
+                reportComponent(source, Component.literal(t.name() + " ")
+                        .append(ChatHelpers.createRunLink("[view]",
+                                "/mossman project config type view " + projectId + " " + q(t.name()),
+                                "View type " + t.name(), ChatFormatting.GREEN)));
+            }
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[create]",
+                            "/mossman project config type create " + projectId + " ",
+                            "Create a new type", ChatFormatting.YELLOW)));
             return p.types().size();
         } catch (UseCaseException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -775,6 +912,17 @@ public final class MossmanCommand {
             report(source, "Background:  #" + String.format("%06X", t.backgroundColor() & 0xFFFFFF));
             long tickets = p.tickets().stream().filter(tk -> tk.typeId().equals(t.id())).count();
             report(source, "Tickets of this type: " + tickets);
+            String qName = q(t.name());
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[update]",
+                            "/mossman project config type update " + projectId + " " + qName + " {}",
+                            "Update type fields", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[order]",
+                            "/mossman project config type order " + projectId + " " + qName + " ",
+                            "Reorder this type", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[delete]",
+                            "/mossman project config type delete " + projectId + " " + qName,
+                            "Delete this type", ChatFormatting.RED)));
             return 1;
         } catch (UseCaseException | IllegalArgumentException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -793,15 +941,18 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runTypeDelete(CommandSourceStack source, String projectId, String typeName) {
+    private static int runTypeDelete(CommandSourceStack source, String projectId, String typeName,
+                                     String replacementName) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
             TicketType toDelete = resolveType(current, typeName);
-            TicketType replacement = current.types().stream()
-                    .filter(t -> !t.id().equals(toDelete.id()))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "cannot delete the only type in '" + projectId + "'"));
+            TicketType replacement = replacementName == null
+                    ? current.types().stream()
+                            .filter(t -> !t.id().equals(toDelete.id()))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalArgumentException(
+                                    "cannot delete the only type in '" + projectId + "'"))
+                    : resolveType(current, replacementName);
             new DeleteTypeUseCase(ctx.repo)
                     .execute(ctx.actor.getUUID(), projectId, toDelete.id(), replacement.id());
             Project updated = ctx.repo.find(projectId).orElseThrow();
@@ -854,7 +1005,11 @@ public final class MossmanCommand {
             }
             p.tickets().stream()
                     .sorted(Comparator.comparingInt(Ticket::number))
-                    .forEach(t -> report(source, "#" + t.number() + " — " + t.title()));
+                    .forEach(t -> reportComponent(source,
+                            Component.literal("#" + t.number() + " — " + t.title() + " ")
+                                    .append(ChatHelpers.createRunLink("[view]",
+                                            "/mossman ticket view " + projectId + " " + t.number(),
+                                            "View ticket #" + t.number(), ChatFormatting.GREEN))));
             return p.tickets().size();
         } catch (UseCaseException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -886,6 +1041,16 @@ public final class MossmanCommand {
             if (!t.description().isBlank()) {
                 report(source, "Description: " + t.description());
             }
+            reportComponent(source, buttonRow(
+                    ChatHelpers.createSuggestLink("[update]",
+                            "/mossman ticket update " + projectId + " " + t.number() + " {}",
+                            "Update ticket fields", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[assign]",
+                            "/mossman ticket update " + projectId + " " + t.number() + " {assignee:\"\"}",
+                            "Assign this ticket", ChatFormatting.YELLOW),
+                    ChatHelpers.createSuggestLink("[delete]",
+                            "/mossman ticket delete " + projectId + " " + t.number(),
+                            "Delete this ticket", ChatFormatting.RED)));
             return 1;
         } catch (UseCaseException | IllegalArgumentException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -1100,6 +1265,24 @@ public final class MossmanCommand {
 
     private static void report(CommandSourceStack source, String message) {
         source.sendSuccess(() -> Component.literal(message), false);
+    }
+
+    private static void reportComponent(CommandSourceStack source, Component component) {
+        source.sendSuccess(() -> component, false);
+    }
+
+    private static String q(String s) {
+        if (s.indexOf(' ') < 0 && s.indexOf('"') < 0) return s;
+        return '"' + s.replace("\\", "\\\\").replace("\"", "\\\"") + '"';
+    }
+
+    private static MutableComponent buttonRow(Component... buttons) {
+        MutableComponent row = Component.literal("  ");
+        for (int i = 0; i < buttons.length; i++) {
+            if (i > 0) row.append(" ");
+            row.append(buttons[i]);
+        }
+        return row;
     }
 
     private static int notPlayer(CommandSourceStack source) {

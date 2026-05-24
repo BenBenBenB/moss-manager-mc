@@ -43,10 +43,7 @@ public final class CreateTicketUseCase {
             throw new NotFoundException(NotFoundException.Kind.TYPE, typeId.toString());
         }
 
-        int nextNumber = project.tickets().stream()
-                .mapToInt(Ticket::number)
-                .max()
-                .orElse(0) + 1;
+        int nextNumber = project.nextTicketNumber();
         Ticket ticket = new Ticket(
                 idSupplier.get(),
                 nextNumber,
@@ -56,7 +53,7 @@ public final class CreateTicketUseCase {
                 statusId,
                 typeId,
                 clock.millis());
-        repository.save(project.addTicket(ticket));
+        repository.save(project.addTicket(ticket).withNextTicketNumber(nextNumber + 1));
         return ticket;
     }
 }

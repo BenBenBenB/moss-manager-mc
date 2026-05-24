@@ -31,7 +31,7 @@ class PermissionEvaluatorTest {
         assertTrue(p.allowNonMembers());
 
         Set<Permission> eff = PermissionEvaluator.effective(p, Players.OWNER);
-        // Default ("Everyone") role grants only VIEW perms in our defaults.
+        // Default role grants only VIEW perms in our defaults.
         assertEquals(Set.of(Permission.VIEW_PROJECT, Permission.VIEW_TICKETS), eff);
         // owner has lost graded permissions; gradeable ADMIN actions are denied.
         assertFalse(eff.contains(Permission.EDIT_PROJECT));
@@ -130,5 +130,34 @@ class PermissionEvaluatorTest {
     void requireSucceedsWhenPermissionGranted() {
         Project p = Projects.seeded(Players.OWNER);
         assertDoesNotThrow(() -> PermissionEvaluator.require(p, Players.OWNER, Permission.MANAGE_ROLES));
+    }
+
+    @Test
+    void higherIndexRoleDenialOverridesLowerGrant() {
+        // Build a project where the Default role grants EDIT_TICKETS but a
+        // higher-index "Restricted" role (appended at the tail) denies it.
+        // The evaluator walks low→high, so the denial wins for members of
+        // Restricted.
+        Project base = Projects.seeded(Players.OWNER);
+
+        com.mossman.core.model.Role defaultRole = base.defaultRole().withGrants(
+                java.util.Set.of(Permission.VIEW_PROJECT, Permission.VIEW_TICKETS, Permission.EDIT_TICKETS));
+        com.mossman.core.model.Role restricted = new com.mossman.core.model.Role(
+                java.util.UUID.randomUUID(), "Restricted",
+                java.util.Set.of(),
+                java.util.Set.of(Permission.EDIT_TICKETS),
+                0);
+        java.util.List<com.mossman.core.model.Role> roles = new java.util.ArrayList<>(base.roles());
+        roles.set(0, defaultRole);
+        roles.add(restricted);
+
+        java.util.Map<java.util.UUID, java.util.Set<java.util.UUID>> mr = new java.util.HashMap<>(base.memberRoles());
+        mr.put(Players.ALICE, java.util.Set.of(restricted.id()));
+        Project p = base.withRoles(roles).withMemberRoles(mr);
+
+        Set<Permission> eff = PermissionEvaluator.effective(p, Players.ALICE);
+        assertTrue(eff.contains(Permission.VIEW_PROJECT));
+        assertFalse(eff.contains(Permission.EDIT_TICKETS),
+                "Restricted's denial of EDIT_TICKETS should override Default's grant");
     }
 }

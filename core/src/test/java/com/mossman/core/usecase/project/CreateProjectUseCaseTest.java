@@ -36,14 +36,14 @@ class CreateProjectUseCaseTest {
     }
 
     @Test
-    void seedsAdminEditorViewerAndDefault() {
+    void seedsDefaultViewerEditorAdmin() {
         Project p = usecase.execute(Players.OWNER, "p1", "My Project");
         assertEquals(4, p.roles().size());
-        assertEquals("Admin",    p.roles().get(0).name());
-        assertEquals("Editor",   p.roles().get(1).name());
-        assertEquals("Viewer",   p.roles().get(2).name());
-        assertEquals("Everyone", p.roles().get(3).name());
-        assertEquals(p.roles().get(3).id(), p.defaultRoleId());
+        assertEquals("Default", p.roles().get(0).name());
+        assertEquals("Viewer",  p.roles().get(1).name());
+        assertEquals("Editor",  p.roles().get(2).name());
+        assertEquals("Admin",   p.roles().get(3).name());
+        assertEquals(p.roles().get(0).id(), p.defaultRoleId());
     }
 
     @Test
@@ -51,5 +51,34 @@ class CreateProjectUseCaseTest {
         usecase.execute(Players.OWNER, "p1", "Original");
         assertThrows(ValidationException.class,
                 () -> usecase.execute(Players.OWNER, "p1", "Another"));
+    }
+
+    @Test
+    void templateOverloadCopiesCatalogWithFreshIds() {
+        Project template = Project.create("default-template", "Default Template", Project.TEMPLATE_OWNER);
+        Project created = usecase.execute(Players.OWNER, "p1", "Mine", template);
+
+        // catalog sizes match the template
+        assertEquals(template.roles().size(), created.roles().size());
+        assertEquals(template.statuses().size(), created.statuses().size());
+        assertEquals(template.types().size(), created.types().size());
+
+        // catalog UUIDs are fresh (no overlap with the template's)
+        Set<UUID> templateRoleIds = template.roles().stream().map(r -> r.id()).collect(java.util.stream.Collectors.toSet());
+        for (var role : created.roles()) {
+            assertFalse(templateRoleIds.contains(role.id()),
+                    "cloned role must have a fresh UUID");
+        }
+
+        // owner replaces the placeholder and is assigned to the admin-equivalent role
+        assertEquals(Players.OWNER, created.ownerUuid());
+        Set<UUID> ownerRoles = created.memberRoles().get(Players.OWNER);
+        assertNotNull(ownerRoles);
+        UUID adminId = Projects.roleIdByName(created, "Admin");
+        assertEquals(Set.of(adminId), ownerRoles);
+
+        // tickets start empty with nextTicketNumber=1
+        assertTrue(created.tickets().isEmpty());
+        assertEquals(1, created.nextTicketNumber());
     }
 }

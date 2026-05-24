@@ -22,16 +22,16 @@ class CreateRoleUseCaseTest {
     private final CreateRoleUseCase usecase = new CreateRoleUseCase(repo, () -> newRoleId);
 
     @Test
-    void ownerCreatesRoleAppendedAboveDefault() {
+    void ownerCreatesRoleAppendedAtEnd() {
         repo.save(Projects.seeded(Players.OWNER));
         Role created = usecase.execute(Players.OWNER, "test", "Triager",
                 Set.of(Permission.VIEW_PROJECT, Permission.CHANGE_TICKET_STATUS), 0xAABBCC);
         Project p = repo.find("test").orElseThrow();
         assertEquals(newRoleId, created.id());
         assertEquals("Triager", created.name());
-        // Default is still last; new role is second-to-last.
-        assertEquals(newRoleId, p.roles().get(p.roles().size() - 2).id());
-        assertEquals(p.defaultRoleId(), p.roles().get(p.roles().size() - 1).id());
+        // Default is at index 0; new role is appended at the tail (highest priority).
+        assertEquals(p.defaultRoleId(), p.roles().get(0).id());
+        assertEquals(newRoleId, p.roles().get(p.roles().size() - 1).id());
     }
 
     @Test

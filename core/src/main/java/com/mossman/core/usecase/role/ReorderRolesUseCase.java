@@ -23,7 +23,8 @@ public final class ReorderRolesUseCase {
 
     /**
      * @param newOrder a permutation of the non-default role ids in the desired top-to-bottom order.
-     *                 The default role automatically stays at the bottom.
+     *                 The default role stays pinned at index 0; higher indices have higher priority
+     *                 in {@link com.mossman.core.permission.PermissionEvaluator}.
      */
     public Project execute(UUID actor, String projectId, List<UUID> newOrder) {
         Objects.requireNonNull(actor, "actor");
@@ -33,7 +34,7 @@ public final class ReorderRolesUseCase {
         RolePermissions.requireManageRoles(project, actor);
 
         Set<UUID> nonDefault = new HashSet<>();
-        for (int i = 0; i < project.roles().size() - 1; i++) nonDefault.add(project.roles().get(i).id());
+        for (int i = 1; i < project.roles().size(); i++) nonDefault.add(project.roles().get(i).id());
 
         if (newOrder.contains(project.defaultRoleId())) {
             throw new ValidationException("default role must not appear in reorder list");
@@ -47,8 +48,8 @@ public final class ReorderRolesUseCase {
         }
 
         List<Role> reordered = new ArrayList<>(project.roles().size());
-        for (UUID id : newOrder) reordered.add(project.findRole(id).orElseThrow());
         reordered.add(project.defaultRole());
+        for (UUID id : newOrder) reordered.add(project.findRole(id).orElseThrow());
 
         Project updated = project.withRoles(reordered);
         repository.save(updated);

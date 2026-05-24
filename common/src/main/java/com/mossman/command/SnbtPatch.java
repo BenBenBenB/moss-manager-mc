@@ -48,6 +48,12 @@ public final class SnbtPatch {
                 .orElseThrow(() -> new Format("expected int for key '" + key + "'")));
     }
 
+    public Optional<Boolean> optionalBool(String key) {
+        if (!tag.contains(key)) return Optional.empty();
+        return Optional.of(tag.getBoolean(key)
+                .orElseThrow(() -> new Format("expected boolean for key '" + key + "'")));
+    }
+
     public Optional<UUID> optionalUuid(String key) {
         return optionalString(key).map(s -> {
             try {

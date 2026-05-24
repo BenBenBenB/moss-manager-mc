@@ -61,7 +61,8 @@ public final class DeleteTypeUseCase {
                 project.memberRoles(),
                 project.statuses(),
                 nextTypes,
-                nextTickets);
+                nextTickets,
+                project.nextTicketNumber());
         repository.save(updated);
     }
 }
