@@ -1,6 +1,5 @@
 package com.mossman.command;
 
-import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -50,35 +49,42 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.CompoundTagArgument;
 import net.minecraft.commands.arguments.EntityArgument;
-import net.minecraft.commands.arguments.NbtTagArgument;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
- * Chat surface for every core use case. Same code path as the C2S handler:
- * both call the same use cases against {@link ServerProjects}'s repo and
- * broadcast through {@link ServerProjectSync}, so observable client state
- * is identical regardless of entry point.
+ * Chat surface for every core use case, shaped per {@code docs/commands.md}.
  *
- * <p>Targeting uses human-readable identifiers: project IDs (already
- * word-shaped), case-insensitive role/status/type names (first match wins
- * if names collide), and per-project ticket numbers. Tab completion is
- * wired via {@link Suggestions} so users can discover valid values
- * inline instead of copying UUIDs out of JSON.
+ * <p>Top-level layout:
+ * <pre>
+ *   /mossman project ... (list, view, create, delete, update, config{role,status,type})
+ *   /mossman ticket ...  (list, view, create, delete, update)
+ * </pre>
  *
- * <p>Update- and create-style leaves still take SNBT compound patches.
- * Missing keys mean "leave the field alone". Distinct semantic operations
- * (assign/unassign/permissions/reorder/delete) get their own leaves.
+ * <p>Every command targets a record by its human name (role, status, type)
+ * or its per-project integer (ticket). {@link Suggestions} provides tab
+ * completion for project IDs, names, ticket numbers, and Permission enum
+ * values. SNBT patches drive update commands: only fields present in the
+ * patch change; missing keys keep the current value.
+ *
+ * <p>Folded commands per the spec: {@code project update} carries
+ * {@code name}/{@code allowNonMembers}/{@code owner} (the old rename,
+ * nonmembers, owner verbs are gone). {@code ticket update} carries
+ * {@code title}/{@code description}/{@code status}/{@code type}/{@code assignee}
+ * (the old per-field ticket verbs are gone). {@code role/status/type order}
+ * moves one record to a position; the old bulk reorder verb is gone.
  */
 public final class MossmanCommand {
 
@@ -87,320 +93,325 @@ public final class MossmanCommand {
     public static void register() {
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, selection) ->
                 dispatcher.register(Commands.literal("mossman")
-                        .then(createLeaf())
-                        .then(listLeaf())
-                        .then(deleteLeaf())
-                        .then(renameLeaf())
-                        .then(ownerLeaf())
-                        .then(nonmembersLeaf())
-                        .then(showLeaf())
-                        .then(roleSubtree())
-                        .then(statusSubtree())
-                        .then(typeSubtree())
+                        .then(projectSubtree())
                         .then(ticketSubtree())));
     }
 
-    // ===== project-level leaves =========================================
+    // ===== /mossman project ============================================
 
-    private static LiteralArgumentBuilder<CommandSourceStack> createLeaf() {
-        return Commands.literal("create")
-                .then(Commands.argument("id", StringArgumentType.word())
-                        .then(Commands.argument("name", StringArgumentType.greedyString())
-                                .executes(ctx -> runCreate(
-                                        ctx.getSource(),
-                                        StringArgumentType.getString(ctx, "id"),
-                                        StringArgumentType.getString(ctx, "name")))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> listLeaf() {
-        return Commands.literal("list").executes(ctx -> runList(ctx.getSource()));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> deleteLeaf() {
-        return Commands.literal("delete")
-                .then(projectIdArg()
-                        .executes(ctx -> runDelete(
-                                ctx.getSource(),
-                                StringArgumentType.getString(ctx, "projectId"))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> renameLeaf() {
-        return Commands.literal("rename")
-                .then(projectIdArg()
-                        .then(Commands.argument("newName", StringArgumentType.greedyString())
-                                .executes(ctx -> runRename(
-                                        ctx.getSource(),
-                                        StringArgumentType.getString(ctx, "projectId"),
-                                        StringArgumentType.getString(ctx, "newName")))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> ownerLeaf() {
-        return Commands.literal("owner")
-                .then(projectIdArg()
-                        .then(Commands.argument("player", EntityArgument.player())
-                                .executes(ctx -> runOwner(
-                                        ctx.getSource(),
-                                        StringArgumentType.getString(ctx, "projectId"),
-                                        EntityArgument.getPlayer(ctx, "player")))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> nonmembersLeaf() {
-        return Commands.literal("nonmembers")
-                .then(projectIdArg()
-                        .then(Commands.argument("allow", BoolArgumentType.bool())
-                                .executes(ctx -> runNonmembers(
-                                        ctx.getSource(),
-                                        StringArgumentType.getString(ctx, "projectId"),
-                                        BoolArgumentType.getBool(ctx, "allow")))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> showLeaf() {
-        return Commands.literal("show")
-                .then(projectIdArg()
-                        .executes(ctx -> runShow(
-                                ctx.getSource(),
-                                StringArgumentType.getString(ctx, "projectId"))));
-    }
-
-    // ===== role subtree =================================================
-    // SNBT shapes:
-    //   create: {name:"Reviewer", color:0xFFAA00, permissions:["VIEW_PROJECT", ...]}
-    //   update: any subset of {name, color}  (patch)
-    //   permissions: {permissions:[...]} — full Set replacement
-    private static LiteralArgumentBuilder<CommandSourceStack> roleSubtree() {
-        return Commands.literal("role")
+    private static LiteralArgumentBuilder<CommandSourceStack> projectSubtree() {
+        return Commands.literal("project")
+                .then(Commands.literal("list")
+                        .executes(ctx -> runProjectList(ctx.getSource())))
+                .then(Commands.literal("view")
+                        .then(projectIdArg()
+                                .executes(ctx -> runProjectView(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "projectId")))))
                 .then(Commands.literal("create")
+                        .then(Commands.argument("projectId", StringArgumentType.word())
+                                .then(Commands.argument("name", StringArgumentType.greedyString())
+                                        .executes(ctx -> runProjectCreate(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "name"))))))
+                .then(Commands.literal("delete")
+                        .then(projectIdArg()
+                                .executes(ctx -> runProjectDelete(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "projectId")))))
+                .then(Commands.literal("update")
                         .then(projectIdArg()
                                 .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
-                                        .executes(ctx -> runRoleCreate(
+                                        .executes(ctx -> runProjectUpdate(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
                                                 CompoundTagArgument.getCompoundTag(ctx, "patch"))))))
+                .then(Commands.literal("config")
+                        .then(roleSubtree())
+                        .then(statusSubtree())
+                        .then(typeSubtree()));
+    }
+
+    // ===== /mossman project config role ================================
+
+    private static LiteralArgumentBuilder<CommandSourceStack> roleSubtree() {
+        return Commands.literal("role")
+                .then(Commands.literal("list")
+                        .then(projectIdArg()
+                                .executes(ctx -> runRoleList(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "projectId")))))
+                .then(Commands.literal("view")
+                        .then(projectIdArg()
+                                .then(roleIdArg()
+                                        .executes(ctx -> runRoleView(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "roleId"))))))
+                .then(Commands.literal("create")
+                        .then(projectIdArg()
+                                .then(Commands.argument("roleId", StringArgumentType.string())
+                                        .executes(ctx -> runRoleCreate(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "roleId"),
+                                                null))
+                                        .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
+                                                .executes(ctx -> runRoleCreate(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "roleId"),
+                                                        CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
+                .then(Commands.literal("delete")
+                        .then(projectIdArg()
+                                .then(roleIdArg()
+                                        .executes(ctx -> runRoleDelete(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "roleId"))))))
                 .then(Commands.literal("update")
                         .then(projectIdArg()
-                                .then(Commands.argument("role", StringArgumentType.string())
-                                        .suggests(Suggestions.roleNames("projectId"))
+                                .then(roleIdArg()
                                         .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
                                                 .executes(ctx -> runRoleUpdate(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "role"),
+                                                        StringArgumentType.getString(ctx, "roleId"),
                                                         CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
-                .then(Commands.literal("delete")
+                .then(Commands.literal("order")
                         .then(projectIdArg()
-                                .then(Commands.argument("role", StringArgumentType.string())
-                                        .suggests(Suggestions.roleNames("projectId"))
-                                        .executes(ctx -> runRoleDelete(
-                                                ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "projectId"),
-                                                StringArgumentType.getString(ctx, "role"))))))
-                .then(Commands.literal("permissions")
-                        .then(projectIdArg()
-                                .then(Commands.argument("role", StringArgumentType.string())
-                                        .suggests(Suggestions.roleNames("projectId"))
-                                        .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
-                                                .executes(ctx -> runRolePermissions(
+                                .then(roleIdArg()
+                                        .then(Commands.argument("position", IntegerArgumentType.integer(1))
+                                                .executes(ctx -> runRoleOrder(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "role"),
-                                                        CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
+                                                        StringArgumentType.getString(ctx, "roleId"),
+                                                        IntegerArgumentType.getInteger(ctx, "position")))))))
+                .then(Commands.literal("grant")
+                        .then(projectIdArg()
+                                .then(roleIdArg()
+                                        .then(Commands.argument("permissionId", StringArgumentType.word())
+                                                .suggests(Suggestions.PERMISSIONS)
+                                                .executes(ctx -> runRoleGrant(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "roleId"),
+                                                        StringArgumentType.getString(ctx, "permissionId")))))))
+                .then(Commands.literal("revoke")
+                        .then(projectIdArg()
+                                .then(roleIdArg()
+                                        .then(Commands.argument("permissionId", StringArgumentType.word())
+                                                .suggests(Suggestions.PERMISSIONS)
+                                                .executes(ctx -> runRoleRevoke(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "roleId"),
+                                                        StringArgumentType.getString(ctx, "permissionId")))))))
                 .then(Commands.literal("assign")
                         .then(projectIdArg()
-                                .then(Commands.argument("role", StringArgumentType.string())
-                                        .suggests(Suggestions.roleNames("projectId"))
+                                .then(roleIdArg()
                                         .then(Commands.argument("player", EntityArgument.player())
                                                 .executes(ctx -> runRoleAssign(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "role"),
+                                                        StringArgumentType.getString(ctx, "roleId"),
                                                         EntityArgument.getPlayer(ctx, "player")))))))
                 .then(Commands.literal("unassign")
                         .then(projectIdArg()
-                                .then(Commands.argument("role", StringArgumentType.string())
-                                        .suggests(Suggestions.roleNames("projectId"))
+                                .then(roleIdArg()
                                         .then(Commands.argument("player", EntityArgument.player())
                                                 .executes(ctx -> runRoleUnassign(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "role"),
-                                                        EntityArgument.getPlayer(ctx, "player")))))))
-                .then(Commands.literal("reorder")
-                        // SNBT list of names, e.g. ["Admin","Editor","Viewer","Everyone"].
-                        // Multi-word names work via standard SNBT string quoting.
-                        .then(projectIdArg()
-                                .then(Commands.argument("order", NbtTagArgument.nbtTag())
-                                        .executes(ctx -> runRoleReorder(
-                                                ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "projectId"),
-                                                NbtTagArgument.getNbtTag(ctx, "order"))))));
+                                                        StringArgumentType.getString(ctx, "roleId"),
+                                                        EntityArgument.getPlayer(ctx, "player")))))));
     }
 
-    // ===== status subtree ===============================================
-    // SNBT shapes:
-    //   create: {name:"In Review", textColor:0xFFFFFF, backgroundColor:0x6B21A8}
-    //   update: any subset of those keys (patch)
+    // ===== /mossman project config status ==============================
+
     private static LiteralArgumentBuilder<CommandSourceStack> statusSubtree() {
         return Commands.literal("status")
+                .then(Commands.literal("list")
+                        .then(projectIdArg()
+                                .executes(ctx -> runStatusList(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "projectId")))))
+                .then(Commands.literal("view")
+                        .then(projectIdArg()
+                                .then(statusIdArg()
+                                        .executes(ctx -> runStatusView(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "statusId"))))))
                 .then(Commands.literal("create")
                         .then(projectIdArg()
-                                .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
+                                .then(Commands.argument("statusId", StringArgumentType.string())
                                         .executes(ctx -> runStatusCreate(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
-                                                CompoundTagArgument.getCompoundTag(ctx, "patch"))))))
+                                                StringArgumentType.getString(ctx, "statusId"),
+                                                null))
+                                        .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
+                                                .executes(ctx -> runStatusCreate(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "statusId"),
+                                                        CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
+                .then(Commands.literal("delete")
+                        .then(projectIdArg()
+                                .then(statusIdArg()
+                                        .executes(ctx -> runStatusDelete(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "statusId"))))))
                 .then(Commands.literal("update")
                         .then(projectIdArg()
-                                .then(Commands.argument("status", StringArgumentType.string())
-                                        .suggests(Suggestions.statusNames("projectId"))
+                                .then(statusIdArg()
                                         .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
                                                 .executes(ctx -> runStatusUpdate(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "status"),
+                                                        StringArgumentType.getString(ctx, "statusId"),
                                                         CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
-                .then(Commands.literal("delete")
+                .then(Commands.literal("order")
                         .then(projectIdArg()
-                                .then(Commands.argument("status", StringArgumentType.string())
-                                        .suggests(Suggestions.statusNames("projectId"))
-                                        .then(Commands.argument("replacement", StringArgumentType.string())
-                                                .suggests(Suggestions.statusNames("projectId"))
-                                                .executes(ctx -> runStatusDelete(
+                                .then(statusIdArg()
+                                        .then(Commands.argument("position", IntegerArgumentType.integer(1))
+                                                .executes(ctx -> runStatusOrder(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "status"),
-                                                        StringArgumentType.getString(ctx, "replacement")))))))
-                .then(Commands.literal("reorder")
-                        .then(projectIdArg()
-                                .then(Commands.argument("order", NbtTagArgument.nbtTag())
-                                        .executes(ctx -> runStatusReorder(
-                                                ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "projectId"),
-                                                NbtTagArgument.getNbtTag(ctx, "order"))))));
+                                                        StringArgumentType.getString(ctx, "statusId"),
+                                                        IntegerArgumentType.getInteger(ctx, "position")))))));
     }
 
-    // ===== type subtree (parallel to status) ============================
+    // ===== /mossman project config type (parallel to status) ===========
+
     private static LiteralArgumentBuilder<CommandSourceStack> typeSubtree() {
         return Commands.literal("type")
+                .then(Commands.literal("list")
+                        .then(projectIdArg()
+                                .executes(ctx -> runTypeList(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "projectId")))))
+                .then(Commands.literal("view")
+                        .then(projectIdArg()
+                                .then(typeIdArg()
+                                        .executes(ctx -> runTypeView(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "typeId"))))))
                 .then(Commands.literal("create")
                         .then(projectIdArg()
-                                .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
+                                .then(Commands.argument("typeId", StringArgumentType.string())
                                         .executes(ctx -> runTypeCreate(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
-                                                CompoundTagArgument.getCompoundTag(ctx, "patch"))))))
+                                                StringArgumentType.getString(ctx, "typeId"),
+                                                null))
+                                        .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
+                                                .executes(ctx -> runTypeCreate(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "typeId"),
+                                                        CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
+                .then(Commands.literal("delete")
+                        .then(projectIdArg()
+                                .then(typeIdArg()
+                                        .executes(ctx -> runTypeDelete(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                StringArgumentType.getString(ctx, "typeId"))))))
                 .then(Commands.literal("update")
                         .then(projectIdArg()
-                                .then(Commands.argument("type", StringArgumentType.string())
-                                        .suggests(Suggestions.typeNames("projectId"))
+                                .then(typeIdArg()
                                         .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
                                                 .executes(ctx -> runTypeUpdate(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "type"),
+                                                        StringArgumentType.getString(ctx, "typeId"),
                                                         CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
-                .then(Commands.literal("delete")
+                .then(Commands.literal("order")
                         .then(projectIdArg()
-                                .then(Commands.argument("type", StringArgumentType.string())
-                                        .suggests(Suggestions.typeNames("projectId"))
-                                        .then(Commands.argument("replacement", StringArgumentType.string())
-                                                .suggests(Suggestions.typeNames("projectId"))
-                                                .executes(ctx -> runTypeDelete(
+                                .then(typeIdArg()
+                                        .then(Commands.argument("position", IntegerArgumentType.integer(1))
+                                                .executes(ctx -> runTypeOrder(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        StringArgumentType.getString(ctx, "type"),
-                                                        StringArgumentType.getString(ctx, "replacement")))))))
-                .then(Commands.literal("reorder")
-                        .then(projectIdArg()
-                                .then(Commands.argument("order", NbtTagArgument.nbtTag())
-                                        .executes(ctx -> runTypeReorder(
-                                                ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "projectId"),
-                                                NbtTagArgument.getNbtTag(ctx, "order"))))));
+                                                        StringArgumentType.getString(ctx, "typeId"),
+                                                        IntegerArgumentType.getInteger(ctx, "position")))))));
     }
 
-    // ===== ticket subtree ===============================================
-    // SNBT shapes:
-    //   create: {title, description?, assignee?, statusId?, typeId?}
-    //   update: any subset of {title, description}  (already patch-style in the use case)
-    // Note: statusId/typeId/assignee inside SNBT are still UUIDs because
-    // SNBT compounds can't carry suggestions. Day-to-day flow uses /mossman
-    // ticket {status,type,assign} commands which DO accept names.
+    // ===== /mossman ticket =============================================
+    // Ticket update patch keys: title, description, status (name), type
+    // (name), assignee (UUID or online player name).
     private static LiteralArgumentBuilder<CommandSourceStack> ticketSubtree() {
         return Commands.literal("ticket")
+                .then(Commands.literal("list")
+                        .then(projectIdArg()
+                                .executes(ctx -> runTicketList(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "projectId")))))
+                .then(Commands.literal("view")
+                        .then(projectIdArg()
+                                .then(ticketIdArg()
+                                        .executes(ctx -> runTicketView(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                IntegerArgumentType.getInteger(ctx, "ticketId"))))))
                 .then(Commands.literal("create")
                         .then(projectIdArg()
+                                .executes(ctx -> runTicketCreate(
+                                        ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "projectId"),
+                                        null))
                                 .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
                                         .executes(ctx -> runTicketCreate(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId"),
                                                 CompoundTagArgument.getCompoundTag(ctx, "patch"))))))
+                .then(Commands.literal("delete")
+                        .then(projectIdArg()
+                                .then(ticketIdArg()
+                                        .executes(ctx -> runTicketDelete(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                IntegerArgumentType.getInteger(ctx, "ticketId"))))))
                 .then(Commands.literal("update")
                         .then(projectIdArg()
-                                .then(Commands.argument("ticket", IntegerArgumentType.integer(1))
-                                        .suggests(Suggestions.ticketNumbers("projectId"))
+                                .then(ticketIdArg()
                                         .then(Commands.argument("patch", CompoundTagArgument.compoundTag())
                                                 .executes(ctx -> runTicketUpdate(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "projectId"),
-                                                        IntegerArgumentType.getInteger(ctx, "ticket"),
-                                                        CompoundTagArgument.getCompoundTag(ctx, "patch")))))))
-                .then(Commands.literal("delete")
-                        .then(projectIdArg()
-                                .then(Commands.argument("ticket", IntegerArgumentType.integer(1))
-                                        .suggests(Suggestions.ticketNumbers("projectId"))
-                                        .executes(ctx -> runTicketDelete(
-                                                ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "projectId"),
-                                                IntegerArgumentType.getInteger(ctx, "ticket"))))))
-                .then(Commands.literal("assign")
-                        .then(projectIdArg()
-                                .then(Commands.argument("ticket", IntegerArgumentType.integer(1))
-                                        .suggests(Suggestions.ticketNumbers("projectId"))
-                                        .then(Commands.argument("player", EntityArgument.player())
-                                                .executes(ctx -> runTicketAssign(
-                                                        ctx.getSource(),
-                                                        StringArgumentType.getString(ctx, "projectId"),
-                                                        IntegerArgumentType.getInteger(ctx, "ticket"),
-                                                        EntityArgument.getPlayer(ctx, "player")))))))
-                .then(Commands.literal("status")
-                        .then(projectIdArg()
-                                .then(Commands.argument("ticket", IntegerArgumentType.integer(1))
-                                        .suggests(Suggestions.ticketNumbers("projectId"))
-                                        .then(Commands.argument("status", StringArgumentType.string())
-                                                .suggests(Suggestions.statusNames("projectId"))
-                                                .executes(ctx -> runTicketStatus(
-                                                        ctx.getSource(),
-                                                        StringArgumentType.getString(ctx, "projectId"),
-                                                        IntegerArgumentType.getInteger(ctx, "ticket"),
-                                                        StringArgumentType.getString(ctx, "status")))))))
-                .then(Commands.literal("type")
-                        .then(projectIdArg()
-                                .then(Commands.argument("ticket", IntegerArgumentType.integer(1))
-                                        .suggests(Suggestions.ticketNumbers("projectId"))
-                                        .then(Commands.argument("type", StringArgumentType.string())
-                                                .suggests(Suggestions.typeNames("projectId"))
-                                                .executes(ctx -> runTicketType(
-                                                        ctx.getSource(),
-                                                        StringArgumentType.getString(ctx, "projectId"),
-                                                        IntegerArgumentType.getInteger(ctx, "ticket"),
-                                                        StringArgumentType.getString(ctx, "type")))))));
+                                                        IntegerArgumentType.getInteger(ctx, "ticketId"),
+                                                        CompoundTagArgument.getCompoundTag(ctx, "patch")))))));
     }
+
+    // ===== arg builders ================================================
 
     private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> projectIdArg() {
         return Commands.argument("projectId", StringArgumentType.word())
                 .suggests(Suggestions.PROJECT_IDS);
     }
 
-    // ===== project handlers =============================================
-
-    private static int runCreate(CommandSourceStack source, String id, String name) {
-        return mutation(source, ctx -> {
-            Project created = new CreateProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, name);
-            return Result.broadcast(created, "Created project " + created.id());
-        });
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> roleIdArg() {
+        return Commands.argument("roleId", StringArgumentType.string())
+                .suggests(Suggestions.roleNames("projectId"));
     }
 
-    private static int runList(CommandSourceStack source) {
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> statusIdArg() {
+        return Commands.argument("statusId", StringArgumentType.string())
+                .suggests(Suggestions.statusNames("projectId"));
+    }
+
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> typeIdArg() {
+        return Commands.argument("typeId", StringArgumentType.string())
+                .suggests(Suggestions.typeNames("projectId"));
+    }
+
+    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, Integer> ticketIdArg() {
+        return Commands.argument("ticketId", IntegerArgumentType.integer(1))
+                .suggests(Suggestions.ticketNumbers("projectId"));
+    }
+
+    // ===== project handlers ============================================
+
+    private static int runProjectList(CommandSourceStack source) {
         ServerPlayer actor = source.getPlayer();
         if (actor == null) return notPlayer(source);
         JsonProjectRepository repo = requireRepo(source);
@@ -417,41 +428,11 @@ public final class MossmanCommand {
         return visible.size();
     }
 
-    private static int runDelete(CommandSourceStack source, String id) {
-        return mutation(source, ctx -> {
-            new DeleteProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id);
-            return Result.removal(id, "Deleted project " + id);
-        });
-    }
-
-    private static int runRename(CommandSourceStack source, String id, String newName) {
-        return mutation(source, ctx -> {
-            Project updated = new RenameProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, newName);
-            return Result.broadcast(updated, "Renamed " + id + " to " + newName);
-        });
-    }
-
-    private static int runOwner(CommandSourceStack source, String id, ServerPlayer newOwner) {
-        return mutation(source, ctx -> {
-            Project updated = new TransferOwnershipUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), id, newOwner.getUUID());
-            return Result.broadcast(updated, "Transferred " + id + " to " + newOwner.getName().getString());
-        });
-    }
-
-    private static int runNonmembers(CommandSourceStack source, String id, boolean allow) {
-        return mutation(source, ctx -> {
-            Project updated = new SetAllowNonMembersUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, allow);
-            return Result.broadcast(updated, "Non-member access on " + id + ": " + allow);
-        });
-    }
-
-    private static int runShow(CommandSourceStack source, String id) {
+    private static int runProjectView(CommandSourceStack source, String id) {
         ServerPlayer actor = source.getPlayer();
         if (actor == null) return notPlayer(source);
         JsonProjectRepository repo = requireRepo(source);
         if (repo == null) return 0;
-
         try {
             Project p = new ProjectQueries(repo).getProject(actor.getUUID(), id).orElse(null);
             if (p == null) {
@@ -480,18 +461,113 @@ public final class MossmanCommand {
         }
     }
 
-    // ===== role handlers ================================================
+    private static int runProjectCreate(CommandSourceStack source, String id, String name) {
+        return mutation(source, ctx -> {
+            Project created = new CreateProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, name);
+            return Result.broadcast(created, "Created project " + created.id());
+        });
+    }
 
-    private static int runRoleCreate(CommandSourceStack source, String projectId, CompoundTag patch) {
+    private static int runProjectDelete(CommandSourceStack source, String id) {
+        return mutation(source, ctx -> {
+            new DeleteProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id);
+            return Result.removal(id, "Deleted project " + id);
+        });
+    }
+
+    private static int runProjectUpdate(CommandSourceStack source, String id, CompoundTag patch) {
         return mutation(source, ctx -> {
             SnbtPatch p = new SnbtPatch(patch);
-            String name = p.optionalString("name")
-                    .orElseThrow(() -> new SnbtPatch.Format("role create requires 'name'"));
+            p.optionalString("name").ifPresent(name ->
+                    new RenameProjectUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, name));
+            if (p.has("allowNonMembers")) {
+                boolean allow = p.optionalString("allowNonMembers")
+                        .map(s -> Boolean.parseBoolean(s))
+                        .orElseGet(() -> p.optionalInt("allowNonMembers")
+                                .map(i -> i != 0)
+                                .orElseThrow(() -> new SnbtPatch.Format(
+                                        "expected boolean for key 'allowNonMembers'")));
+                new SetAllowNonMembersUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, allow);
+            }
+            p.optionalString("owner").ifPresent(ref -> {
+                UUID newOwner = resolvePlayerRef(source.getServer(), ref);
+                new TransferOwnershipUseCase(ctx.repo).execute(ctx.actor.getUUID(), id, newOwner);
+            });
+            Project updated = ctx.repo.find(id).orElseThrow();
+            return Result.broadcast(updated, "Updated project " + id);
+        });
+    }
+
+    // ===== role handlers ===============================================
+
+    private static int runRoleList(CommandSourceStack source, String projectId) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            for (Role r : p.roles()) {
+                boolean isDefault = p.defaultRoleId().equals(r.id());
+                report(source, r.name() + (isDefault ? "  (default)" : ""));
+            }
+            return p.roles().size();
+        } catch (UseCaseException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int runRoleView(CommandSourceStack source, String projectId, String roleName) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            Role r = resolveRole(p, roleName);
+            report(source, "== Role: " + r.name() + " ==");
+            report(source, "Color: #" + String.format("%06X", r.color() & 0xFFFFFF));
+            if (r.permissions().isEmpty()) {
+                report(source, "Permissions: (none)");
+            } else {
+                report(source, "Permissions: " + r.permissions().stream()
+                        .map(Permission::name)
+                        .sorted()
+                        .collect(Collectors.joining(", ")));
+            }
+            long members = p.memberRoles().values().stream()
+                    .filter(set -> set.contains(r.id()))
+                    .count();
+            report(source, "Members: " + members);
+            if (p.defaultRoleId().equals(r.id())) report(source, "(default role)");
+            return 1;
+        } catch (UseCaseException | IllegalArgumentException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int runRoleCreate(CommandSourceStack source, String projectId, String roleName, CompoundTag patch) {
+        return mutation(source, ctx -> {
+            SnbtPatch p = patch == null ? new SnbtPatch(new CompoundTag()) : new SnbtPatch(patch);
             int color = p.optionalInt("color").orElse(0xFFFFFF);
             Set<Permission> perms = p.optionalPermissions("permissions").orElse(Set.of());
-            new CreateRoleUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, name, perms, color);
+            new CreateRoleUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleName, perms, color);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Created role " + name);
+            return Result.broadcast(updated, "Created role " + roleName);
+        });
+    }
+
+    private static int runRoleDelete(CommandSourceStack source, String projectId, String roleName) {
+        return mutation(source, ctx -> {
+            Project current = requireProject(ctx.repo, projectId);
+            UUID roleId = resolveRole(current, roleName).id();
+            new DeleteRoleUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleId);
+            Project updated = ctx.repo.find(projectId).orElseThrow();
+            return Result.broadcast(updated, "Deleted role " + roleName);
         });
     }
 
@@ -509,26 +585,46 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runRoleDelete(CommandSourceStack source, String projectId, String roleName) {
+    private static int runRoleOrder(CommandSourceStack source, String projectId, String roleName, int position) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
             UUID roleId = resolveRole(current, roleName).id();
-            new DeleteRoleUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleId);
+            List<UUID> order = moveToPosition(
+                    current.roles().stream().map(Role::id).collect(Collectors.toList()),
+                    roleId, position);
+            new ReorderRolesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, order);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Deleted role " + roleName);
+            return Result.broadcast(updated, "Moved role " + roleName + " to position " + position);
         });
     }
 
-    private static int runRolePermissions(CommandSourceStack source, String projectId, String roleName, CompoundTag patch) {
+    private static int runRoleGrant(CommandSourceStack source, String projectId, String roleName, String permName) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            UUID roleId = resolveRole(current, roleName).id();
-            SnbtPatch p = new SnbtPatch(patch);
-            Set<Permission> perms = p.optionalPermissions("permissions")
-                    .orElseThrow(() -> new SnbtPatch.Format("role permissions requires 'permissions' list"));
-            new UpdateRolePermissionsUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, roleId, perms);
+            Role role = resolveRole(current, roleName);
+            Permission perm = parsePermission(permName);
+            Set<Permission> next = EnumSet.copyOf(role.permissions());
+            next.add(perm);
+            new UpdateRolePermissionsUseCase(ctx.repo)
+                    .execute(ctx.actor.getUUID(), projectId, role.id(), next);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Set " + perms.size() + " permission(s) on role " + roleName);
+            return Result.broadcast(updated, "Granted " + perm.name() + " to " + roleName);
+        });
+    }
+
+    private static int runRoleRevoke(CommandSourceStack source, String projectId, String roleName, String permName) {
+        return mutation(source, ctx -> {
+            Project current = requireProject(ctx.repo, projectId);
+            Role role = resolveRole(current, roleName);
+            Permission perm = parsePermission(permName);
+            Set<Permission> next = role.permissions().isEmpty()
+                    ? EnumSet.noneOf(Permission.class)
+                    : EnumSet.copyOf(role.permissions());
+            next.remove(perm);
+            new UpdateRolePermissionsUseCase(ctx.repo)
+                    .execute(ctx.actor.getUUID(), projectId, role.id(), next);
+            Project updated = ctx.repo.find(projectId).orElseThrow();
+            return Result.broadcast(updated, "Revoked " + perm.name() + " from " + roleName);
         });
     }
 
@@ -552,28 +648,70 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runRoleReorder(CommandSourceStack source, String projectId, Tag order) {
+    // ===== status handlers =============================================
+
+    private static int runStatusList(CommandSourceStack source, String projectId) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            for (TicketStatus s : p.statuses()) report(source, s.name());
+            return p.statuses().size();
+        } catch (UseCaseException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int runStatusView(CommandSourceStack source, String projectId, String statusName) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            TicketStatus s = resolveStatus(p, statusName);
+            report(source, "== Status: " + s.name() + " ==");
+            report(source, "Text color: #" + String.format("%06X", s.textColor() & 0xFFFFFF));
+            report(source, "Background:  #" + String.format("%06X", s.backgroundColor() & 0xFFFFFF));
+            long tickets = p.tickets().stream().filter(t -> t.statusId().equals(s.id())).count();
+            report(source, "Tickets in this status: " + tickets);
+            return 1;
+        } catch (UseCaseException | IllegalArgumentException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int runStatusCreate(CommandSourceStack source, String projectId, String statusName, CompoundTag patch) {
         return mutation(source, ctx -> {
-            Project current = requireProject(ctx.repo, projectId);
-            List<UUID> ids = parseNameList(order, name -> resolveRole(current, name).id());
-            new ReorderRolesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, ids);
+            SnbtPatch p = patch == null ? new SnbtPatch(new CompoundTag()) : new SnbtPatch(patch);
+            int textColor = p.optionalInt("textColor").orElse(0xFFFFFF);
+            int bgColor = p.optionalInt("backgroundColor").orElse(0x000000);
+            new CreateStatusUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, statusName, textColor, bgColor);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Reordered " + ids.size() + " role(s)");
+            return Result.broadcast(updated, "Created status " + statusName);
         });
     }
 
-    // ===== status handlers ==============================================
-
-    private static int runStatusCreate(CommandSourceStack source, String projectId, CompoundTag patch) {
+    private static int runStatusDelete(CommandSourceStack source, String projectId, String statusName) {
         return mutation(source, ctx -> {
-            SnbtPatch p = new SnbtPatch(patch);
-            String name = p.optionalString("name")
-                    .orElseThrow(() -> new SnbtPatch.Format("status create requires 'name'"));
-            int textColor = p.optionalInt("textColor").orElse(0xFFFFFF);
-            int bgColor = p.optionalInt("backgroundColor").orElse(0x000000);
-            new CreateStatusUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, name, textColor, bgColor);
+            Project current = requireProject(ctx.repo, projectId);
+            TicketStatus toDelete = resolveStatus(current, statusName);
+            TicketStatus replacement = current.statuses().stream()
+                    .filter(s -> !s.id().equals(toDelete.id()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "cannot delete the only status in '" + projectId + "'"));
+            new DeleteStatusUseCase(ctx.repo)
+                    .execute(ctx.actor.getUUID(), projectId, toDelete.id(), replacement.id());
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Created status " + name);
+            return Result.broadcast(updated,
+                    "Deleted status " + statusName + " (tickets moved to " + replacement.name() + ")");
         });
     }
 
@@ -592,41 +730,83 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runStatusDelete(CommandSourceStack source, String projectId,
-                                       String statusName, String replacementName) {
+    private static int runStatusOrder(CommandSourceStack source, String projectId, String statusName, int position) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            UUID statusId = resolveStatus(current, statusName).id();
-            UUID replacementId = resolveStatus(current, replacementName).id();
-            new DeleteStatusUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, statusId, replacementId);
+            UUID id = resolveStatus(current, statusName).id();
+            List<UUID> order = moveToPosition(
+                    current.statuses().stream().map(TicketStatus::id).collect(Collectors.toList()),
+                    id, position);
+            new ReorderStatusesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, order);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Deleted status " + statusName);
+            return Result.broadcast(updated, "Moved status " + statusName + " to position " + position);
         });
     }
 
-    private static int runStatusReorder(CommandSourceStack source, String projectId, Tag order) {
-        return mutation(source, ctx -> {
-            Project current = requireProject(ctx.repo, projectId);
-            List<UUID> ids = parseNameList(order, name -> resolveStatus(current, name).id());
-            new ReorderStatusesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, ids);
-            Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Reordered " + ids.size() + " status(es)");
-        });
+    // ===== type handlers ===============================================
+
+    private static int runTypeList(CommandSourceStack source, String projectId) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            for (TicketType t : p.types()) report(source, t.name());
+            return p.types().size();
+        } catch (UseCaseException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
     }
 
-    // ===== type handlers ================================================
+    private static int runTypeView(CommandSourceStack source, String projectId, String typeName) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            TicketType t = resolveType(p, typeName);
+            report(source, "== Type: " + t.name() + " ==");
+            report(source, "Text color: #" + String.format("%06X", t.textColor() & 0xFFFFFF));
+            report(source, "Background:  #" + String.format("%06X", t.backgroundColor() & 0xFFFFFF));
+            long tickets = p.tickets().stream().filter(tk -> tk.typeId().equals(t.id())).count();
+            report(source, "Tickets of this type: " + tickets);
+            return 1;
+        } catch (UseCaseException | IllegalArgumentException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+    }
 
-    private static int runTypeCreate(CommandSourceStack source, String projectId, CompoundTag patch) {
+    private static int runTypeCreate(CommandSourceStack source, String projectId, String typeName, CompoundTag patch) {
         return mutation(source, ctx -> {
-            SnbtPatch p = new SnbtPatch(patch);
-            String name = p.optionalString("name")
-                    .orElseThrow(() -> new SnbtPatch.Format("type create requires 'name'"));
+            SnbtPatch p = patch == null ? new SnbtPatch(new CompoundTag()) : new SnbtPatch(patch);
             int textColor = p.optionalInt("textColor").orElse(0xFFFFFF);
             int bgColor = p.optionalInt("backgroundColor").orElse(0x000000);
-            new CreateTypeUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, name, textColor, bgColor);
+            new CreateTypeUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, typeName, textColor, bgColor);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Created type " + name);
+            return Result.broadcast(updated, "Created type " + typeName);
+        });
+    }
+
+    private static int runTypeDelete(CommandSourceStack source, String projectId, String typeName) {
+        return mutation(source, ctx -> {
+            Project current = requireProject(ctx.repo, projectId);
+            TicketType toDelete = resolveType(current, typeName);
+            TicketType replacement = current.types().stream()
+                    .filter(t -> !t.id().equals(toDelete.id()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "cannot delete the only type in '" + projectId + "'"));
+            new DeleteTypeUseCase(ctx.repo)
+                    .execute(ctx.actor.getUUID(), projectId, toDelete.id(), replacement.id());
+            Project updated = ctx.repo.find(projectId).orElseThrow();
+            return Result.broadcast(updated,
+                    "Deleted type " + typeName + " (tickets moved to " + replacement.name() + ")");
         });
     }
 
@@ -645,41 +825,90 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runTypeDelete(CommandSourceStack source, String projectId,
-                                     String typeName, String replacementName) {
+    private static int runTypeOrder(CommandSourceStack source, String projectId, String typeName, int position) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            UUID typeId = resolveType(current, typeName).id();
-            UUID replacementId = resolveType(current, replacementName).id();
-            new DeleteTypeUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, typeId, replacementId);
+            UUID id = resolveType(current, typeName).id();
+            List<UUID> order = moveToPosition(
+                    current.types().stream().map(TicketType::id).collect(Collectors.toList()),
+                    id, position);
+            new ReorderTypesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, order);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Deleted type " + typeName);
+            return Result.broadcast(updated, "Moved type " + typeName + " to position " + position);
         });
     }
 
-    private static int runTypeReorder(CommandSourceStack source, String projectId, Tag order) {
-        return mutation(source, ctx -> {
-            Project current = requireProject(ctx.repo, projectId);
-            List<UUID> ids = parseNameList(order, name -> resolveType(current, name).id());
-            new ReorderTypesUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, ids);
-            Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Reordered " + ids.size() + " type(s)");
-        });
+    // ===== ticket handlers =============================================
+
+    private static int runTicketList(CommandSourceStack source, String projectId) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            if (p.tickets().isEmpty()) {
+                report(source, "No tickets in " + projectId + ".");
+                return 0;
+            }
+            p.tickets().stream()
+                    .sorted(Comparator.comparingInt(Ticket::number))
+                    .forEach(t -> report(source, "#" + t.number() + " — " + t.title()));
+            return p.tickets().size();
+        } catch (UseCaseException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
     }
 
-    // ===== ticket handlers ==============================================
+    private static int runTicketView(CommandSourceStack source, String projectId, int number) {
+        ServerPlayer actor = source.getPlayer();
+        if (actor == null) return notPlayer(source);
+        JsonProjectRepository repo = requireRepo(source);
+        if (repo == null) return 0;
+        try {
+            Project p = new ProjectQueries(repo).getProject(actor.getUUID(), projectId)
+                    .orElseThrow(() -> new NotFoundException(NotFoundException.Kind.PROJECT, projectId));
+            Ticket t = resolveTicket(p, number);
+            TicketStatus s = p.findStatus(t.statusId()).orElse(null);
+            TicketType ty = p.findType(t.typeId()).orElse(null);
+            report(source, "== Ticket #" + t.number() + " — " + t.title() + " ==");
+            report(source, "Status: " + (s == null ? "(missing)" : s.name()));
+            report(source, "Type:   " + (ty == null ? "(missing)" : ty.name()));
+            if (t.assigneeUuid() == null) {
+                report(source, "Assignee: (unassigned)");
+            } else {
+                final UUID a = t.assigneeUuid();
+                source.sendSuccess(() -> Component.literal("Assignee: ")
+                        .append(ChatHelpers.playerName(source.getServer(), a)), false);
+            }
+            if (!t.description().isBlank()) {
+                report(source, "Description: " + t.description());
+            }
+            return 1;
+        } catch (UseCaseException | IllegalArgumentException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+    }
 
     private static int runTicketCreate(CommandSourceStack source, String projectId, CompoundTag patch) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            SnbtPatch p = new SnbtPatch(patch);
+            SnbtPatch p = patch == null ? new SnbtPatch(new CompoundTag()) : new SnbtPatch(patch);
             String title = p.optionalString("title")
                     .orElseThrow(() -> new SnbtPatch.Format("ticket create requires 'title'"));
             String description = p.optionalString("description").orElse("");
-            UUID assignee = p.optionalUuid("assignee").orElse(null);
-            UUID statusId = p.optionalUuid("statusId").orElseGet(() -> firstStatusId(current));
-            UUID typeId = p.optionalUuid("typeId").orElseGet(() -> firstTypeId(current));
+            UUID assignee = p.optionalString("assignee")
+                    .map(ref -> resolvePlayerRef(source.getServer(), ref))
+                    .orElse(null);
+            UUID statusId = p.optionalString("status")
+                    .map(name -> resolveStatus(current, name).id())
+                    .orElseGet(() -> firstStatusId(current));
+            UUID typeId = p.optionalString("type")
+                    .map(name -> resolveType(current, name).id())
+                    .orElseGet(() -> firstTypeId(current));
             Ticket created = new CreateTicketUseCase(ctx.repo)
                     .execute(ctx.actor.getUUID(), projectId, title, description, assignee, statusId, typeId);
             Project updated = ctx.repo.find(projectId).orElseThrow();
@@ -687,66 +916,51 @@ public final class MossmanCommand {
         });
     }
 
-    private static int runTicketUpdate(CommandSourceStack source, String projectId, int ticketNumber, CompoundTag patch) {
+    private static int runTicketDelete(CommandSourceStack source, String projectId, int number) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            UUID ticketId = resolveTicket(current, ticketNumber).id();
-            SnbtPatch p = new SnbtPatch(patch);
-            String newTitle = p.optionalString("title").orElse(null);
-            String newDescription = p.optionalString("description").orElse(null);
-            new UpdateTicketUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, ticketId, newTitle, newDescription);
-            Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Updated ticket #" + ticketNumber);
-        });
-    }
-
-    private static int runTicketDelete(CommandSourceStack source, String projectId, int ticketNumber) {
-        return mutation(source, ctx -> {
-            Project current = requireProject(ctx.repo, projectId);
-            UUID ticketId = resolveTicket(current, ticketNumber).id();
+            UUID ticketId = resolveTicket(current, number).id();
             new DeleteTicketUseCase(ctx.repo).execute(ctx.actor.getUUID(), projectId, ticketId);
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Deleted ticket #" + ticketNumber);
+            return Result.broadcast(updated, "Deleted ticket #" + number);
         });
     }
 
-    private static int runTicketAssign(CommandSourceStack source, String projectId, int ticketNumber, ServerPlayer target) {
+    private static int runTicketUpdate(CommandSourceStack source, String projectId, int number, CompoundTag patch) {
         return mutation(source, ctx -> {
             Project current = requireProject(ctx.repo, projectId);
-            UUID ticketId = resolveTicket(current, ticketNumber).id();
-            new AssignTicketUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, ticketId, target.getUUID());
+            UUID ticketId = resolveTicket(current, number).id();
+            SnbtPatch p = new SnbtPatch(patch);
+
+            if (p.has("title") || p.has("description")) {
+                String newTitle = p.optionalString("title").orElse(null);
+                String newDescription = p.optionalString("description").orElse(null);
+                new UpdateTicketUseCase(ctx.repo)
+                        .execute(ctx.actor.getUUID(), projectId, ticketId, newTitle, newDescription);
+            }
+            p.optionalString("status").ifPresent(name -> {
+                UUID statusId = resolveStatus(current, name).id();
+                new ChangeTicketStatusUseCase(ctx.repo)
+                        .execute(ctx.actor.getUUID(), projectId, ticketId, statusId);
+            });
+            p.optionalString("type").ifPresent(name -> {
+                UUID typeId = resolveType(current, name).id();
+                new ChangeTicketTypeUseCase(ctx.repo)
+                        .execute(ctx.actor.getUUID(), projectId, ticketId, typeId);
+            });
+            if (p.has("assignee")) {
+                UUID assignee = p.optionalString("assignee")
+                        .map(ref -> ref.isEmpty() ? null : resolvePlayerRef(source.getServer(), ref))
+                        .orElse(null);
+                new AssignTicketUseCase(ctx.repo)
+                        .execute(ctx.actor.getUUID(), projectId, ticketId, assignee);
+            }
             Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Assigned ticket #" + ticketNumber + " to " + target.getName().getString());
+            return Result.broadcast(updated, "Updated ticket #" + number);
         });
     }
 
-    private static int runTicketStatus(CommandSourceStack source, String projectId, int ticketNumber, String statusName) {
-        return mutation(source, ctx -> {
-            Project current = requireProject(ctx.repo, projectId);
-            UUID ticketId = resolveTicket(current, ticketNumber).id();
-            UUID statusId = resolveStatus(current, statusName).id();
-            new ChangeTicketStatusUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, ticketId, statusId);
-            Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Moved ticket #" + ticketNumber + " to " + statusName);
-        });
-    }
-
-    private static int runTicketType(CommandSourceStack source, String projectId, int ticketNumber, String typeName) {
-        return mutation(source, ctx -> {
-            Project current = requireProject(ctx.repo, projectId);
-            UUID ticketId = resolveTicket(current, ticketNumber).id();
-            UUID typeId = resolveType(current, typeName).id();
-            new ChangeTicketTypeUseCase(ctx.repo)
-                    .execute(ctx.actor.getUUID(), projectId, ticketId, typeId);
-            Project updated = ctx.repo.find(projectId).orElseThrow();
-            return Result.broadcast(updated, "Set ticket #" + ticketNumber + " type to " + typeName);
-        });
-    }
-
-    // ===== mutation scaffolding =========================================
+    // ===== mutation scaffolding ========================================
 
     private record MutationCtx(ServerPlayer actor, JsonProjectRepository repo) {}
 
@@ -788,7 +1002,7 @@ public final class MossmanCommand {
         }
     }
 
-    // ===== resolution helpers ===========================================
+    // ===== resolution helpers ==========================================
 
     private static Project requireProject(JsonProjectRepository repo, String projectId) {
         return repo.find(projectId)
@@ -830,22 +1044,47 @@ public final class MossmanCommand {
                         "no ticket #" + number + " in project '" + project.id() + "'"));
     }
 
-    private static List<UUID> parseNameList(Tag tag, java.util.function.Function<String, UUID> resolveToId) {
-        if (!(tag instanceof ListTag list)) {
-            throw new IllegalArgumentException("expected an SNBT list of names, e.g. [\"Admin\",\"Editor\",...]");
+    private static Permission parsePermission(String name) {
+        try {
+            return Permission.valueOf(name);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("unknown permission '" + name + "'");
         }
-        List<UUID> out = new ArrayList<>(list.size());
-        for (int i = 0; i < list.size(); i++) {
-            final int idx = i;
-            String name = list.getString(i)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "expected a string at index " + idx + " of the order list"));
-            out.add(resolveToId.apply(name));
-        }
-        return out;
     }
 
-    // ===== shared helpers ===============================================
+    /**
+     * Accepts either a UUID string or the name of a currently-online player.
+     * Online-only fallback for now; offline-by-name needs profile-cache work.
+     */
+    private static UUID resolvePlayerRef(MinecraftServer server, String ref) {
+        try {
+            return UUID.fromString(ref);
+        } catch (IllegalArgumentException ignored) {
+            // not a UUID — try name
+        }
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            if (p.getGameProfile().name().equalsIgnoreCase(ref)) return p.getUUID();
+        }
+        throw new IllegalArgumentException("no online player named '" + ref
+                + "' (use the player's UUID for offline targets)");
+    }
+
+    /**
+     * Returns {@code currentOrder} with {@code targetId} moved to the 1-based
+     * {@code position}. Position is clamped to {@code [1, size]}.
+     */
+    private static List<UUID> moveToPosition(List<UUID> currentOrder, UUID targetId, int position) {
+        List<UUID> next = new ArrayList<>(currentOrder);
+        if (!next.remove(targetId)) {
+            throw new IllegalArgumentException("internal: target id missing from order list");
+        }
+        int clamped = Math.max(1, Math.min(position, next.size() + 1));
+        next.add(clamped - 1, targetId);
+        // Sanity check: no duplicates (use LinkedHashSet to preserve order).
+        return new ArrayList<>(new LinkedHashSet<>(next));
+    }
+
+    // ===== shared helpers ==============================================
 
     private static UUID firstStatusId(Project project) {
         List<TicketStatus> statuses = project.statuses();

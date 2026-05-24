@@ -128,8 +128,9 @@
 
 <h1>Moss Manager — Manual test plan</h1>
 <p class="muted">
-  Check off each row as you verify it. State persists in your browser's
-  <code>localStorage</code> under the key <code>mossman-test-plan-v2</code>.
+  Tracks the command tree defined in <code>docs/commands.md</code>. Check each
+  row as you verify it; state persists in your browser's <code>localStorage</code>
+  under the key <code>mossman-test-plan-v4</code>.
 </p>
 
 <h2>Setup</h2>
@@ -139,21 +140,19 @@
   <li>World folder default: <code>run/saves/&lt;world-name&gt;/</code>.
     Project files land at
     <code>&lt;world&gt;/mossmandata/projects/&lt;id&gt;.json</code>.</li>
-  <li><strong>You no longer need to look up UUIDs.</strong>
-    Role/status/type commands take names; ticket commands take per-project
-    integers (visible in <code>/mossman show</code>). Tab-completion suggests
-    every valid value from the current project — exercise it as you go.</li>
+  <li>Names are user-facing identifiers; ticket numbers are per-project
+    integers visible in <code>/mossman ticket list &lt;projectId&gt;</code>.
+    Tab-completion suggests every valid value from the current project —
+    exercise it as you go.</li>
 </ol>
 <p>
-  Optional: launch a second client on the same LAN (Fabric: Open to LAN,
-  then connect from a separate client) for the
+  Optional: a second client on the same LAN for the
   <span class="multiplayer">multi-player rows</span> below. All other
   commands work solo.
 </p>
 <p>
-  Successful commands print white confirmation text in chat
-  (<code>sendSuccess</code>); failures print red error text
-  (<code>sendFailure</code>).
+  Successful commands print white text (<code>sendSuccess</code>);
+  failures print red (<code>sendFailure</code>).
 </p>
 
 <h2>Round 0 — Tab-completion sanity check</h2>
@@ -162,13 +161,19 @@
   <tbody>
     <tr><td><input type="checkbox" data-id="0.1"></td><td>0.1</td>
       <td class="command">Type <code>/mossman </code> and Tab</td>
-      <td class="expected">Suggests every top-level subcommand: <code>create</code>, <code>list</code>, <code>delete</code>, <code>rename</code>, <code>owner</code>, <code>nonmembers</code>, <code>show</code>, <code>role</code>, <code>status</code>, <code>type</code>, <code>ticket</code></td></tr>
+      <td class="expected">Suggests <code>project</code>, <code>ticket</code></td></tr>
     <tr><td><input type="checkbox" data-id="0.2"></td><td>0.2</td>
-      <td class="command">Type <code>/mossman role update </code> and Tab (with at least <code>alpha</code> created — do row 1.2 first)</td>
-      <td class="expected">Project ID dropdown shows <code>alpha</code> with the project name in the tooltip</td></tr>
+      <td class="command">Type <code>/mossman project </code> and Tab</td>
+      <td class="expected">Suggests <code>list</code>, <code>view</code>, <code>create</code>, <code>delete</code>, <code>update</code>, <code>config</code></td></tr>
     <tr><td><input type="checkbox" data-id="0.3"></td><td>0.3</td>
-      <td class="command">Type <code>/mossman role update alpha </code> and Tab</td>
-      <td class="expected">Suggests <code>Admin</code>, <code>Editor</code>, <code>Viewer</code>, <code>Everyone</code> (case-insensitive prefix match works too)</td></tr>
+      <td class="command">Type <code>/mossman project config </code> and Tab</td>
+      <td class="expected">Suggests <code>role</code>, <code>status</code>, <code>type</code></td></tr>
+    <tr><td><input type="checkbox" data-id="0.4"></td><td>0.4</td>
+      <td class="command">After row 1.3, type <code>/mossman project config role update alpha </code> and Tab</td>
+      <td class="expected">Suggests existing role names — <code>Admin</code>, <code>Editor</code>, <code>Viewer</code>, <code>Everyone</code></td></tr>
+    <tr><td><input type="checkbox" data-id="0.5"></td><td>0.5</td>
+      <td class="command">Type <code>/mossman project config role grant alpha Admin </code> and Tab</td>
+      <td class="expected">Suggests every Permission enum value — <code>VIEW_PROJECT</code>, <code>EDIT_PROJECT</code>, <code>MANAGE_ROLES</code>, <code>VIEW_TICKETS</code>, <code>CREATE_TICKETS</code>, <code>EDIT_TICKETS</code>, <code>DELETE_TICKETS</code>, <code>ASSIGN_TICKETS</code>, <code>CHANGE_TICKET_STATUS</code></td></tr>
   </tbody>
 </table>
 
@@ -177,152 +182,167 @@
   <thead><tr><th></th><th>#</th><th>Command</th><th>Expected</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="1.1"></td><td>1.1</td>
-      <td class="command"><code>/mossman list</code></td>
+      <td class="command"><code>/mossman project list</code></td>
       <td class="expected"><code>No projects you can view.</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.2"></td><td>1.2</td>
-      <td class="command"><code>/mossman create alpha My Demo</code></td>
-      <td class="expected"><code>Created project alpha</code> &nbsp;·&nbsp; <code>alpha.json</code> appears in <code>mossmandata/projects/</code></td></tr>
+      <td class="command"><code>/mossman project create alpha My Demo</code></td>
+      <td class="expected"><code>Created project alpha</code> &nbsp;·&nbsp; <code>alpha.json</code> appears under <code>mossmandata/projects/</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.3"></td><td>1.3</td>
-      <td class="command"><code>/mossman create alpha Dup</code></td>
+      <td class="command"><code>/mossman project create alpha Dup</code></td>
       <td class="expected warn"><code>project already exists: alpha</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.4"></td><td>1.4</td>
-      <td class="command"><code>/mossman list</code></td>
+      <td class="command"><code>/mossman project list</code></td>
       <td class="expected"><code>alpha — My Demo</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.5"></td><td>1.5</td>
-      <td class="command"><code>/mossman show alpha</code></td>
-      <td class="expected">Header line, then <code>Owner: &lt;your player name&gt;</code> (<strong>hover the name</strong> to see your full UUID), <code>Allow non-members: true</code>, <code>Roles: 4</code>, <code>Statuses: 3</code>, <code>Types: 4</code>, <code>Tickets: 0</code></td></tr>
+      <td class="command"><code>/mossman project view alpha</code></td>
+      <td class="expected">Header, <code>Owner: &lt;your player name&gt;</code> (hover for full UUID), <code>Allow non-members: true</code>, counts of roles/statuses/types, <code>Tickets: 0</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.6"></td><td>1.6</td>
-      <td class="command"><code>/mossman rename alpha Renamed Demo</code></td>
-      <td class="expected"><code>Renamed alpha to Renamed Demo</code> &nbsp;·&nbsp; <code>/mossman list</code> shows new name</td></tr>
+      <td class="command"><code>/mossman project update alpha {name:"Renamed Demo"}</code></td>
+      <td class="expected"><code>Updated project alpha</code> · <code>/mossman project list</code> shows <code>alpha — Renamed Demo</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.7"></td><td>1.7</td>
-      <td class="command"><code>/mossman nonmembers alpha false</code></td>
-      <td class="expected"><code>Non-member access on alpha: false</code> &nbsp;·&nbsp; <code>/mossman show</code> reflects flag</td></tr>
+      <td class="command"><code>/mossman project update alpha {allowNonMembers:false}</code></td>
+      <td class="expected"><code>Updated project alpha</code> · <code>view</code> shows <code>Allow non-members: false</code></td></tr>
     <tr><td><input type="checkbox" data-id="1.8"></td><td>1.8</td>
-      <td class="command"><code>/mossman nonmembers alpha true</code></td>
-      <td class="expected"><code>Non-member access on alpha: true</code></td></tr>
+      <td class="command"><code>/mossman project update alpha {allowNonMembers:true, name:"My Demo"}</code></td>
+      <td class="expected"><code>Updated project alpha</code> — both fields revert in one call (patch carries multiple keys)</td></tr>
     <tr><td><input type="checkbox" data-id="1.9"></td><td>1.9</td>
-      <td class="command multiplayer"><code>/mossman owner alpha &lt;OtherPlayer&gt;</code></td>
-      <td class="expected multiplayer"><code>Transferred alpha to &lt;OtherPlayer&gt;</code>. <span class="warn">You may lose admin access.</span></td></tr>
+      <td class="command multiplayer"><code>/mossman project update alpha {owner:"&lt;OtherPlayerName&gt;"}</code></td>
+      <td class="expected multiplayer"><code>Updated project alpha</code> · <code>view</code> shows the new owner. <span class="warn">You may lose admin access.</span> A UUID string works too if the player is offline.</td></tr>
   </tbody>
 </table>
 <p class="warn"><strong>Don't delete <code>alpha</code> yet</strong> — Rounds 2–5 need it.</p>
 
 <h2>Round 2 — Role commands</h2>
-<p class="muted">Targeting by name. Tab-completion suggests existing roles after you type the project ID.</p>
+<p class="muted">Targeting by case-insensitive name. Tab-completion suggests existing roles after you type the project ID.</p>
 <table>
   <thead><tr><th></th><th>#</th><th>Command</th><th>Expected</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="2.1"></td><td>2.1</td>
-      <td class="command"><code>/mossman role create alpha {name:"Reviewer", color:0xFFAA00, permissions:["VIEW_PROJECT","VIEW_TICKETS"]}</code></td>
-      <td class="expected"><code>Created role Reviewer</code></td></tr>
+      <td class="command"><code>/mossman project config role list alpha</code></td>
+      <td class="expected">Lists <code>Admin</code>, <code>Editor</code>, <code>Viewer</code>, <code>Everyone&nbsp;(default)</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.2"></td><td>2.2</td>
-      <td class="command"><code>/mossman role create alpha {color:1}</code></td>
-      <td class="expected warn"><code>role create requires 'name'</code></td></tr>
+      <td class="command"><code>/mossman project config role view alpha Admin</code></td>
+      <td class="expected">Header, hex color, sorted Permissions list, member count</td></tr>
     <tr><td><input type="checkbox" data-id="2.3"></td><td>2.3</td>
-      <td class="command"><code>/mossman role update alpha Reviewer {name:"Senior Reviewer"}</code></td>
-      <td class="expected"><code>Updated role Reviewer</code> — name changes to "Senior Reviewer", color preserved (verify with another <code>/mossman show</code> or by inspecting JSON)</td></tr>
+      <td class="command"><code>/mossman project config role create alpha Reviewer</code></td>
+      <td class="expected"><code>Created role Reviewer</code> with default color (white) and no permissions</td></tr>
     <tr><td><input type="checkbox" data-id="2.4"></td><td>2.4</td>
-      <td class="command"><code>/mossman role update alpha "Senior Reviewer" {color:0xFF00FF}</code></td>
-      <td class="expected"><code>Updated role Senior Reviewer</code> — color changes; name preserved. Quoted name needed because of the space.</td></tr>
+      <td class="command"><code>/mossman project config role create alpha "Senior Reviewer" {color:0xFFAA00, permissions:["VIEW_PROJECT","VIEW_TICKETS"]}</code></td>
+      <td class="expected"><code>Created role Senior Reviewer</code> with the supplied color + permissions</td></tr>
     <tr><td><input type="checkbox" data-id="2.5"></td><td>2.5</td>
-      <td class="command"><code>/mossman role permissions alpha "Senior Reviewer" {permissions:["VIEW_PROJECT","EDIT_TICKETS"]}</code></td>
-      <td class="expected"><code>Set 2 permission(s) on role Senior Reviewer</code></td></tr>
+      <td class="command"><code>/mossman project config role update alpha Reviewer {name:"Casual Reviewer", color:0x00FFFF}</code></td>
+      <td class="expected"><code>Updated role Reviewer</code> — both fields change (multi-key patch)</td></tr>
     <tr><td><input type="checkbox" data-id="2.6"></td><td>2.6</td>
-      <td class="command"><code>/mossman role permissions alpha Editor {permissions:["BOGUS"]}</code></td>
-      <td class="expected warn"><code>unknown permission 'BOGUS' in 'permissions'</code></td></tr>
+      <td class="command"><code>/mossman project config role grant alpha "Casual Reviewer" EDIT_TICKETS</code></td>
+      <td class="expected"><code>Granted EDIT_TICKETS to Casual Reviewer</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.7"></td><td>2.7</td>
-      <td class="command"><code>/mossman role reorder alpha ["Admin","Senior Reviewer","Editor","Viewer","Everyone"]</code></td>
-      <td class="expected"><code>Reordered 5 role(s)</code>. <span class="warn">Everyone (default role) must stay last.</span> Reorder takes an SNBT list, so multi-word names like <code>"Senior Reviewer"</code> work without renaming.</td></tr>
+      <td class="command"><code>/mossman project config role grant alpha "Casual Reviewer" BOGUS</code></td>
+      <td class="expected warn"><code>unknown permission 'BOGUS'</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.8"></td><td>2.8</td>
-      <td class="command"><code>/mossman role delete alpha Reviewer</code></td>
-      <td class="expected"><code>Deleted role Reviewer</code></td></tr>
+      <td class="command"><code>/mossman project config role revoke alpha "Casual Reviewer" EDIT_TICKETS</code></td>
+      <td class="expected"><code>Revoked EDIT_TICKETS from Casual Reviewer</code></td></tr>
     <tr><td><input type="checkbox" data-id="2.9"></td><td>2.9</td>
-      <td class="command multiplayer"><code>/mossman role assign alpha Editor &lt;OtherPlayer&gt;</code></td>
-      <td class="expected multiplayer"><code>Assigned Editor to &lt;OtherPlayer&gt;</code></td></tr>
+      <td class="command"><code>/mossman project config role order alpha "Casual Reviewer" 2</code></td>
+      <td class="expected"><code>Moved role Casual Reviewer to position 2</code> · <code>role list</code> reflects new order. <span class="warn">Everyone (default) must stay last.</span></td></tr>
     <tr><td><input type="checkbox" data-id="2.10"></td><td>2.10</td>
-      <td class="command multiplayer"><code>/mossman role unassign alpha Editor &lt;OtherPlayer&gt;</code></td>
+      <td class="command"><code>/mossman project config role order alpha Everyone 1</code></td>
+      <td class="expected warn">Use-case rejection: default role must be last (error message from the core layer)</td></tr>
+    <tr><td><input type="checkbox" data-id="2.11"></td><td>2.11</td>
+      <td class="command"><code>/mossman project config role delete alpha "Casual Reviewer"</code></td>
+      <td class="expected"><code>Deleted role Reviewer</code></td></tr>
+    <tr><td><input type="checkbox" data-id="2.12"></td><td>2.12</td>
+      <td class="command multiplayer"><code>/mossman project config role assign alpha Editor &lt;OtherPlayer&gt;</code></td>
+      <td class="expected multiplayer"><code>Assigned Editor to &lt;OtherPlayer&gt;</code></td></tr>
+    <tr><td><input type="checkbox" data-id="2.13"></td><td>2.13</td>
+      <td class="command multiplayer"><code>/mossman project config role unassign alpha Editor &lt;OtherPlayer&gt;</code></td>
       <td class="expected multiplayer"><code>Unassigned Editor from &lt;OtherPlayer&gt;</code></td></tr>
   </tbody>
 </table>
 
 <h2>Round 3 — Status commands</h2>
-<p class="muted">Defaults are <code>TODO</code>, <code>"In Progress"</code> (needs quoting), <code>Done</code>.</p>
+<p class="muted">Defaults: <code>TODO</code>, <code>"In Progress"</code>, <code>Done</code>. Delete picks the first remaining status as the replacement automatically.</p>
 <table>
   <thead><tr><th></th><th>#</th><th>Command</th><th>Expected</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="3.1"></td><td>3.1</td>
-      <td class="command"><code>/mossman status create alpha {name:"Review", textColor:0xFFFFFF, backgroundColor:0x6B21A8}</code></td>
-      <td class="expected"><code>Created status Review</code></td></tr>
+      <td class="command"><code>/mossman project config status list alpha</code></td>
+      <td class="expected">Lists <code>TODO</code>, <code>In Progress</code>, <code>Done</code></td></tr>
     <tr><td><input type="checkbox" data-id="3.2"></td><td>3.2</td>
-      <td class="command"><code>/mossman status update alpha Review {name:"Awaiting Review"}</code></td>
-      <td class="expected"><code>Updated status Review</code> — name changes; colors preserved</td></tr>
+      <td class="command"><code>/mossman project config status view alpha "In Progress"</code></td>
+      <td class="expected">Header, hex text/background colors, tickets count</td></tr>
     <tr><td><input type="checkbox" data-id="3.3"></td><td>3.3</td>
-      <td class="command"><code>/mossman status update alpha "Awaiting Review" {backgroundColor:0x000000}</code></td>
-      <td class="expected"><code>Updated status Awaiting Review</code> — only bg changes; name + textColor preserved</td></tr>
+      <td class="command"><code>/mossman project config status create alpha Review</code></td>
+      <td class="expected"><code>Created status Review</code> (default white-on-black)</td></tr>
     <tr><td><input type="checkbox" data-id="3.4"></td><td>3.4</td>
-      <td class="command"><code>/mossman status reorder alpha ["TODO","Awaiting Review","In Progress","Done"]</code></td>
-      <td class="expected"><code>Reordered 4 status(es)</code> — multi-word names like <code>"In Progress"</code> work directly inside the SNBT list.</td></tr>
+      <td class="command"><code>/mossman project config status update alpha Review {name:"Awaiting Review", backgroundColor:0x6B21A8}</code></td>
+      <td class="expected"><code>Updated status Review</code> — name + bg change, textColor preserved</td></tr>
     <tr><td><input type="checkbox" data-id="3.5"></td><td>3.5</td>
-      <td class="command"><code>/mossman status delete alpha Review TODO</code></td>
-      <td class="expected"><code>Deleted status Review</code> — any tickets that were on Review get moved to TODO (covered in Round 5)</td></tr>
+      <td class="command"><code>/mossman project config status order alpha "Awaiting Review" 2</code></td>
+      <td class="expected"><code>Moved status Awaiting Review to position 2</code></td></tr>
+    <tr><td><input type="checkbox" data-id="3.6"></td><td>3.6</td>
+      <td class="command"><code>/mossman project config status delete alpha "Awaiting Review"</code></td>
+      <td class="expected"><code>Deleted status Awaiting Review (tickets moved to TODO)</code> — replacement is the first remaining status by current order</td></tr>
   </tbody>
 </table>
 
 <h2>Round 4 — Type commands</h2>
-<p class="muted">Defaults are <code>Bug</code>, <code>Feature</code>, <code>Task</code>, <code>Chore</code>. Parallel to status.</p>
+<p class="muted">Defaults: <code>Bug</code>, <code>Feature</code>, <code>Task</code>, <code>Chore</code>. Same shape as status.</p>
 <table>
   <thead><tr><th></th><th>#</th><th>Command</th><th>Expected</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="4.1"></td><td>4.1</td>
-      <td class="command"><code>/mossman type create alpha {name:"Spike", textColor:0xFFFFFF, backgroundColor:0x444444}</code></td>
-      <td class="expected"><code>Created type Spike</code></td></tr>
+      <td class="command"><code>/mossman project config type list alpha</code></td>
+      <td class="expected">Lists <code>Bug</code>, <code>Feature</code>, <code>Task</code>, <code>Chore</code></td></tr>
     <tr><td><input type="checkbox" data-id="4.2"></td><td>4.2</td>
-      <td class="command"><code>/mossman type update alpha Spike {name:"Investigation"}</code></td>
-      <td class="expected"><code>Updated type Spike</code></td></tr>
+      <td class="command"><code>/mossman project config type create alpha Spike {textColor:0xFFFFFF, backgroundColor:0x444444}</code></td>
+      <td class="expected"><code>Created type Spike</code></td></tr>
     <tr><td><input type="checkbox" data-id="4.3"></td><td>4.3</td>
-      <td class="command"><code>/mossman type reorder alpha ["Bug","Feature","Task","Chore","Investigation"]</code></td>
-      <td class="expected"><code>Reordered 5 type(s)</code></td></tr>
+      <td class="command"><code>/mossman project config type view alpha Spike</code></td>
+      <td class="expected">Header + the colors you set</td></tr>
     <tr><td><input type="checkbox" data-id="4.4"></td><td>4.4</td>
-      <td class="command"><code>/mossman type delete alpha Spike Task</code></td>
-      <td class="expected"><code>Deleted type Spike</code></td></tr>
+      <td class="command"><code>/mossman project config type update alpha Spike {name:"Investigation"}</code></td>
+      <td class="expected"><code>Updated type Spike</code></td></tr>
+    <tr><td><input type="checkbox" data-id="4.5"></td><td>4.5</td>
+      <td class="command"><code>/mossman project config type order alpha Investigation 1</code></td>
+      <td class="expected"><code>Moved type Investigation to position 1</code></td></tr>
+    <tr><td><input type="checkbox" data-id="4.6"></td><td>4.6</td>
+      <td class="command"><code>/mossman project config type delete alpha Investigation</code></td>
+      <td class="expected"><code>Deleted type Investigation (tickets moved to Bug)</code></td></tr>
   </tbody>
 </table>
 
 <h2>Round 5 — Ticket commands</h2>
-<p class="muted">Tickets are addressed by per-project integer (<code>#1</code>, <code>#2</code>, …) once created. Use <code>/mossman show alpha</code> to list them; tab-completion on the ticket arg shows each number with the title in the tooltip.</p>
+<p class="muted">Tickets are addressed by per-project integer (<code>#1</code>, <code>#2</code>, …) once created. Use <code>/mossman ticket list &lt;projectId&gt;</code> to see numbers; tab-completion on the ticket arg shows each number with the title in the tooltip.</p>
 <table>
   <thead><tr><th></th><th>#</th><th>Command</th><th>Expected</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="5.1"></td><td>5.1</td>
-      <td class="command"><code>/mossman ticket create alpha {title:"First bug"}</code></td>
-      <td class="expected"><code>Created ticket #1</code> — uses first status, first type, no assignee</td></tr>
+      <td class="command"><code>/mossman ticket list alpha</code></td>
+      <td class="expected"><code>No tickets in alpha.</code></td></tr>
     <tr><td><input type="checkbox" data-id="5.2"></td><td>5.2</td>
-      <td class="command"><code>/mossman ticket create alpha {}</code></td>
-      <td class="expected warn"><code>ticket create requires 'title'</code></td></tr>
+      <td class="command"><code>/mossman ticket create alpha {title:"First bug"}</code></td>
+      <td class="expected"><code>Created ticket #1</code></td></tr>
     <tr><td><input type="checkbox" data-id="5.3"></td><td>5.3</td>
-      <td class="command"><code>/mossman ticket create alpha {title:"Big feature", description:"detailed desc"}</code></td>
-      <td class="expected"><code>Created ticket #2</code> (number auto-increments; gaps preserved across deletes)</td></tr>
+      <td class="command"><code>/mossman ticket create alpha</code> (no patch)</td>
+      <td class="expected warn"><code>ticket create requires 'title'</code></td></tr>
     <tr><td><input type="checkbox" data-id="5.4"></td><td>5.4</td>
-      <td class="command"><code>/mossman show alpha</code></td>
-      <td class="expected">Tickets section shows <code>#1 — First bug</code> and <code>#2 — Big feature</code></td></tr>
+      <td class="command"><code>/mossman ticket create alpha {title:"Big feature", description:"detailed desc", status:"In Progress", type:"Feature"}</code></td>
+      <td class="expected"><code>Created ticket #2</code></td></tr>
     <tr><td><input type="checkbox" data-id="5.5"></td><td>5.5</td>
-      <td class="command"><code>/mossman ticket update alpha 1 {title:"Renamed"}</code></td>
-      <td class="expected"><code>Updated ticket #1</code> — description preserved</td></tr>
+      <td class="command"><code>/mossman ticket view alpha 2</code></td>
+      <td class="expected">Header, <code>Status: In Progress</code>, <code>Type: Feature</code>, <code>Assignee: (unassigned)</code>, description</td></tr>
     <tr><td><input type="checkbox" data-id="5.6"></td><td>5.6</td>
-      <td class="command"><code>/mossman ticket update alpha 1 {description:"new desc"}</code></td>
-      <td class="expected"><code>Updated ticket #1</code> — title preserved</td></tr>
+      <td class="command"><code>/mossman ticket update alpha 1 {title:"Renamed", status:"Done"}</code></td>
+      <td class="expected"><code>Updated ticket #1</code> — title + status change in one call (multi-field patch fans out to UpdateTicketUseCase + ChangeTicketStatusUseCase internally)</td></tr>
     <tr><td><input type="checkbox" data-id="5.7"></td><td>5.7</td>
-      <td class="command"><code>/mossman ticket status alpha 1 Done</code></td>
-      <td class="expected"><code>Moved ticket #1 to Done</code></td></tr>
+      <td class="command"><code>/mossman ticket update alpha 1 {type:"Bug"}</code></td>
+      <td class="expected"><code>Updated ticket #1</code> — only type changes; title preserved</td></tr>
     <tr><td><input type="checkbox" data-id="5.8"></td><td>5.8</td>
-      <td class="command"><code>/mossman ticket type alpha 1 Bug</code></td>
-      <td class="expected"><code>Set ticket #1 type to Bug</code></td></tr>
+      <td class="command multiplayer"><code>/mossman ticket update alpha 1 {assignee:"&lt;OtherPlayerName&gt;"}</code></td>
+      <td class="expected multiplayer"><code>Updated ticket #1</code> · <code>ticket view alpha 1</code> shows <code>Assignee: &lt;OtherPlayer&gt;</code> with UUID in hover</td></tr>
     <tr><td><input type="checkbox" data-id="5.9"></td><td>5.9</td>
       <td class="command"><code>/mossman ticket delete alpha 1</code></td>
       <td class="expected"><code>Deleted ticket #1</code>. <em>Note:</em> creating another ticket now jumps to <code>#3</code> — numbers don't get reused.</td></tr>
-    <tr><td><input type="checkbox" data-id="5.10"></td><td>5.10</td>
-      <td class="command multiplayer"><code>/mossman ticket assign alpha 2 &lt;OtherPlayer&gt;</code></td>
-      <td class="expected multiplayer"><code>Assigned ticket #2 to &lt;OtherPlayer&gt;</code></td></tr>
   </tbody>
 </table>
 
@@ -331,18 +351,15 @@
   <thead><tr><th></th><th>#</th><th>Step</th><th>Expected</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="6.1"></td><td>6.1</td>
-      <td class="command"><code>/mossman delete alpha</code></td>
-      <td class="expected"><code>Deleted project alpha</code> &nbsp;·&nbsp; <code>alpha.json</code> removed from disk &nbsp;·&nbsp; <code>/mossman list</code> empty</td></tr>
+      <td class="command"><code>/mossman project delete alpha</code></td>
+      <td class="expected"><code>Deleted project alpha</code> · <code>alpha.json</code> removed · <code>/mossman project list</code> empty</td></tr>
     <tr><td><input type="checkbox" data-id="6.2"></td><td>6.2</td>
-      <td class="command">Quit, restart world, rejoin</td>
-      <td class="expected"><code>/mossman list</code> still empty (cache rebuilt from empty disk)</td></tr>
+      <td class="command"><code>/mossman project create beta Persist Test</code>, then quit + rejoin</td>
+      <td class="expected"><code>/mossman project list</code> shows <code>beta — Persist Test</code></td></tr>
     <tr><td><input type="checkbox" data-id="6.3"></td><td>6.3</td>
-      <td class="command"><code>/mossman create beta Persist Test</code>, then quit + rejoin</td>
-      <td class="expected"><code>/mossman list</code> shows <code>beta — Persist Test</code> (<code>loadAll</code> on SERVER_STARTED)</td></tr>
-    <tr><td><input type="checkbox" data-id="6.4"></td><td>6.4</td>
-      <td class="command">Create 3 tickets, delete <code>#2</code>, restart, then:<br>
+      <td class="command">Create 3 tickets, delete #2, restart, then<br>
         <code>/mossman ticket create beta {title:"after restart"}</code></td>
-      <td class="expected">New ticket gets <code>#4</code>, not <code>#2</code> — numbers persist through restart and never reuse.</td></tr>
+      <td class="expected">New ticket gets <code>#4</code>, not <code>#2</code> — numbers persist and never reuse</td></tr>
   </tbody>
 </table>
 
@@ -351,26 +368,23 @@
   <thead><tr><th></th><th>#</th><th>Command</th><th>Expected</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="7.1"></td><td>7.1</td>
-      <td class="command">From the server console (not in-game): <code>/mossman list</code></td>
+      <td class="command">From the server console: <code>/mossman project list</code></td>
       <td class="expected warn"><code>Only players can use /mossman.</code></td></tr>
     <tr><td><input type="checkbox" data-id="7.2"></td><td>7.2</td>
-      <td class="command"><code>/mossman delete nonexistent</code></td>
+      <td class="command"><code>/mossman project delete nonexistent</code></td>
       <td class="expected warn"><code>project not found: nonexistent</code></td></tr>
     <tr><td><input type="checkbox" data-id="7.3"></td><td>7.3</td>
-      <td class="command"><code>/mossman role update beta NonexistentRole {name:"x"}</code></td>
+      <td class="command"><code>/mossman project config role update beta NonexistentRole {name:"x"}</code></td>
       <td class="expected warn"><code>no role named 'NonexistentRole' in project 'beta'</code></td></tr>
     <tr><td><input type="checkbox" data-id="7.4"></td><td>7.4</td>
-      <td class="command"><code>/mossman status update beta TODO {name:1}</code> (int where string expected)</td>
+      <td class="command"><code>/mossman project config status update beta TODO {name:1}</code> (int where string expected)</td>
       <td class="expected warn"><code>expected string for key 'name'</code></td></tr>
     <tr><td><input type="checkbox" data-id="7.5"></td><td>7.5</td>
       <td class="command"><code>/mossman ticket update beta 999 {title:"x"}</code></td>
       <td class="expected warn"><code>no ticket #999 in project 'beta'</code></td></tr>
     <tr><td><input type="checkbox" data-id="7.6"></td><td>7.6</td>
-      <td class="command"><code>/mossman role reorder beta ["Admin","DoesNotExist","Editor","Viewer","Everyone"]</code></td>
-      <td class="expected warn"><code>no role named 'DoesNotExist' in project 'beta'</code></td></tr>
-    <tr><td><input type="checkbox" data-id="7.7"></td><td>7.7</td>
-      <td class="command"><code>/mossman role reorder beta {not:"a list"}</code></td>
-      <td class="expected warn"><code>expected an SNBT list of names, e.g. ["Admin","Editor",...]</code></td></tr>
+      <td class="command"><code>/mossman project update beta {owner:"NotARealPlayer"}</code></td>
+      <td class="expected warn"><code>no online player named 'NotARealPlayer' …</code></td></tr>
   </tbody>
 </table>
 
@@ -380,14 +394,14 @@
   <thead><tr><th></th><th>#</th><th>Action on client A</th><th>Expected on client B</th></tr></thead>
   <tbody>
     <tr><td><input type="checkbox" data-id="8.1"></td><td>8.1</td>
-      <td class="command multiplayer"><code>/mossman create gamma G</code></td>
-      <td class="expected multiplayer">Client B's <code>/mossman list</code> now includes <code>gamma</code></td></tr>
+      <td class="command multiplayer"><code>/mossman project create gamma G</code></td>
+      <td class="expected multiplayer">Client B's <code>/mossman project list</code> now includes <code>gamma</code></td></tr>
     <tr><td><input type="checkbox" data-id="8.2"></td><td>8.2</td>
-      <td class="command multiplayer"><code>/mossman delete gamma</code></td>
-      <td class="expected multiplayer">Client B's <code>/mossman list</code> no longer shows <code>gamma</code> (RemoveProjectS2C broadcast)</td></tr>
+      <td class="command multiplayer"><code>/mossman project delete gamma</code></td>
+      <td class="expected multiplayer">Client B's <code>/mossman project list</code> no longer shows <code>gamma</code> (RemoveProjectS2C broadcast)</td></tr>
     <tr><td><input type="checkbox" data-id="8.3"></td><td>8.3</td>
       <td class="command multiplayer">A creates a project while B is offline; B then joins</td>
-      <td class="expected multiplayer">B's <code>/mossman list</code> shows the project (PLAYER_JOIN snapshot path)</td></tr>
+      <td class="expected multiplayer">B's <code>/mossman project list</code> shows the project (PLAYER_JOIN snapshot path)</td></tr>
   </tbody>
 </table>
 
@@ -395,17 +409,18 @@
 <ul>
   <li>Permission enforcement under non-owner roles — needs at least three
     players or an <code>/op</code> / <code>/deop</code> workflow.</li>
-  <li>Offline-player targets for <code>role assign</code> /
-    <code>ticket assign</code> / <code>owner</code> — current commands use
-    <code>EntityArgument.player()</code>, which requires an online target.</li>
-  <li>Offline-aware owner-name resolution in <code>show</code> — owner who
-    isn't currently online displays as a short UUID prefix; the hover still
-    shows the full UUID.</li>
+  <li>Offline-player targets in <code>role assign/unassign</code> — those
+    still use <code>EntityArgument.player()</code>. The
+    <code>project update {owner:"…"}</code> and
+    <code>ticket update {assignee:"…"}</code> patches accept a UUID string
+    so an offline player can be referenced by UUID when needed.</li>
+  <li>Offline-aware name resolution for <code>owner</code>/<code>assignee</code>
+    by name — only currently-online players are reachable by name.</li>
 </ul>
 
 <script>
 (function () {
-  const STORAGE_KEY = "mossman-test-plan-v2";
+  const STORAGE_KEY = "mossman-test-plan-v4";
   const boxes = Array.from(document.querySelectorAll("input[type=checkbox][data-id]"));
   const fill = document.getElementById("progress-fill");
   const text = document.getElementById("progress-text");

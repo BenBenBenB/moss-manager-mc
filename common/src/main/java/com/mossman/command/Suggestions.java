@@ -93,6 +93,17 @@ public final class Suggestions {
         };
     }
 
+    /** Suggests every {@link Permission} enum value, for role grant/revoke. */
+    public static final SuggestionProvider<CommandSourceStack> PERMISSIONS = (ctx, builder) -> {
+        String prefix = builder.getRemaining().toLowerCase(Locale.ROOT);
+        for (Permission p : Permission.values()) {
+            if (p.name().toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                builder.suggest(p.name());
+            }
+        }
+        return builder.buildFuture();
+    };
+
     /** Each ticket-number suggestion shows the ticket's title in the tooltip. */
     public static SuggestionProvider<CommandSourceStack> ticketNumbers(String projectIdArg) {
         return (ctx, builder) -> {
